@@ -1,0 +1,13 @@
+example/__pycache__/
+__pycache__/
+*.py[cod]
+.env
+*.egg-info/
+data/chroma/
+data/*.db
+data/*.sqlite*
+.pytest_cache/
+.chainlit/
+.files/
+**/__pycache__/
+.venv/

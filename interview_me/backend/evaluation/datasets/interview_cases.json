@@ -1,0 +1,6 @@
+[
+  {"query": "hello", "expected_guard": "greeting"},
+  {"query": "Tell me about your education", "expected_guard": "relevant"},
+  {"query": "What is the weather today?", "expected_guard": "irrelevant"},
+  {"query": "Which projects did you build?", "expected_guard": "relevant"}
+]

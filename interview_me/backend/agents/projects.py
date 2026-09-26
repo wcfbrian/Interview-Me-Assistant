@@ -11,7 +11,6 @@ from interview_me.backend.artifacts import load_projects
 from interview_me.backend.config import settings, tracing_config
 from interview_me.backend.ingest_project import get_project_bm25, get_project_vector_store
 
-from langchain.agents.middleware import ToolCallLimitMiddleware
 
 
 def _tokens(text: str) -> list[str]:
@@ -100,7 +99,7 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
     ]
 
 
-@tool("retrieve_project_evidence")
+@tool
 def _retrieve_project_evidence(query: str) -> str:
     """Return project evidence from fused semantic and lexical retrieval."""
     projects = load_projects(settings.project_path)

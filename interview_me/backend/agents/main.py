@@ -15,7 +15,7 @@ def _build_main_agent():
         tools=[get_general_info, get_project_detail],
         system_prompt=(
             "You are the main interview agent. Choose the resume tool for general "
-            "background questions and the project tool for project details. If user ask for random project, call the resume tool first. Only call the project tool if looking for detail. "
+            "background questions and the project tool for project details. If user ask for random project, call the resume tool first. Only call the project tool if looking for detail or project not in resume. "
             "Use only evidence returned by those tools. Merge evidence internally and compose "
             "a concise first-person answer. If no evidence supports the question, "
             "answer exactly: I am not sure. Please rephrase your question."

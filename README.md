@@ -88,8 +88,9 @@ The guard uses a structured model call. Unit tests mock this call; live runtime
 uses `OPENROUTER_API_KEY`.
 
 Project summaries are embedded with `EMBEDDING_MODEL` through OpenRouter and
-persisted in `CHROMA_DIR`. The project subagent uses this Chroma index for
-semantic search and returns the matching approved README as evidence.
+persisted in `CHROMA_DIR`. The project subagent combines Chroma semantic search
+with BM25 lexical search using weighted reciprocal-rank fusion, then returns
+matching approved README content as evidence.
 
 For Docker:
 
@@ -99,7 +100,7 @@ docker compose up --build
 
 ## Current scope
 
-The graph, grounded artifact tools, ingestion commands, Chainlit adapter, Docker
-packaging, structured model decisions, and evaluation baseline are implemented.
-BM25 hybrid retrieval and DeepEval/JEV integration remain the next
+The graph, grounded artifact tools, hybrid project retrieval, ingestion commands,
+Chainlit adapter, Docker packaging, structured model decisions, and evaluation
+baseline are implemented. DeepEval/JEV integration remains the next
 accuracy-focused layer.

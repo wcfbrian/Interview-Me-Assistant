@@ -14,27 +14,30 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from interview_me.backend.agents.main import run_main_agent
 from interview_me.backend.decisions import classify_with_model
 
-GuardRoute = Literal["relevant", "greeting", "irrelevant"]
+GuardRoute = Literal["safe", "greeting", "prohibited"]
 
 
-def _last_user_message(messages: list[BaseMessage]) -> str:
-    """Return the latest user query, or an empty string for malformed input."""
-    for message in reversed(messages):
-        if isinstance(message, HumanMessage):
-            return str(message.content)
-    return ""
+def _guard_context(messages: list[BaseMessage]) -> str:
+    """Format the conversation so the guard can classify follow-up questions."""
+    if len(messages) == 1:
+        return str(messages[0].content)
+    turns = []
+    for message in messages:
+        role = "user" if isinstance(message, HumanMessage) else "assistant"
+        turns.append(f"{role}: {message.content}")
+    return "\n".join(turns)
 
 
 def guard_route(state: MessagesState) -> GuardRoute:
     """Route the request using the mandatory structured guard model."""
-    query = _last_user_message(state["messages"]).strip().lower()
-    category = classify_with_model(query).category
-    return "irrelevant" if category == "prohibited" else category
+    context = _guard_context(state["messages"]).strip()
+    category = classify_with_model(context).category
+    return category
     
 
 
 def fixed_greeting(_: MessagesState) -> dict[str, list[BaseMessage]]:
-    return {"messages": [AIMessage(content="Hello. Please ask me about my background or projects.")]}
+    return {"messages": [AIMessage(content="Hello. Welcome to interview me.")]}
 
 
 def fixed_relevance_response(_: MessagesState) -> dict[str, list[BaseMessage]]:
@@ -56,9 +59,9 @@ def build_graph():
         START,
         guard_route,
         {
-            "relevant": "main_agent",
+            "safe": "main_agent",
             "greeting": "fixed_greeting",
-            "irrelevant": "fixed_relevance_response",
+            "prohibited": "fixed_relevance_response",
         },
     )
     builder.add_edge("main_agent", END)

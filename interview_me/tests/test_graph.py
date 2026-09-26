@@ -10,14 +10,14 @@ from interview_me.backend.decisions import GuardDecision
 from interview_me.backend.ingest import ingest
 from interview_me.backend.ingest_project import ProjectSummary, index_projects
 from interview_me.backend.ingest_resume import CandidateProfile
-from interview_me.backend.agents.projects import get_project_detail
+from interview_me.backend.agents.projects import _hybrid_project_search, get_project_detail
 
 
 def _mock_guard(query):
     normalized = query.lower()
     if normalized in {"hi", "hello", "hey"}:
         return GuardDecision(category="greeting", reason="greeting")
-    if "education" in normalized or "project" in normalized:
+    if "education" in normalized or "project" in normalized or "name" in normalized:
         return GuardDecision(category="relevant", reason="candidate question")
     return GuardDecision(category="irrelevant", reason="not a candidate question")
 from interview_me.backend.graph import guard_route, build_graph
@@ -26,6 +26,32 @@ from interview_me.backend.graph import guard_route, build_graph
 def test_guard_routes_interview_question_to_main_agent(monkeypatch):
     monkeypatch.setattr("interview_me.backend.graph.classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="Tell me about your projects")]}) == "relevant"
+
+
+def test_guard_passes_conversation_context_for_followup(monkeypatch):
+    captured = {}
+
+    def fake_guard(context):
+        captured["context"] = context
+        return GuardDecision(category="relevant", reason="follow-up")
+
+    monkeypatch.setattr("interview_me.backend.graph.classify_with_model", fake_guard)
+    route = guard_route({
+        "messages": [
+            HumanMessage(content="Tell me about your projects"),
+            AIMessage(content="I built a grounded chatbot."),
+            HumanMessage(content="What about that project?"),
+        ]
+    })
+
+    assert route == "relevant"
+    assert "Tell me about your projects" in captured["context"]
+    assert "What about that project?" in captured["context"]
+
+
+def test_guard_allows_candidate_name_question(monkeypatch):
+    monkeypatch.setattr("interview_me.backend.graph.classify_with_model", _mock_guard)
+    assert guard_route({"messages": [HumanMessage(content="What is your name?")]}) == "relevant"
 
 
 def test_guard_routes_greeting_to_fixed_response(monkeypatch):
@@ -150,6 +176,23 @@ def test_index_projects_embeds_summaries_with_project_metadata(monkeypatch, tmp_
     assert vector_store.documents[0].page_content == "A retrieval project"
     assert vector_store.documents[0].metadata["name"] == "demo"
     assert vector_store.ids == ["project-0"]
+
+
+def test_hybrid_project_search_combines_vector_and_lexical_results():
+    projects = [
+        {"name": "semantic", "summary": "retrieval system", "readme": "semantic"},
+        {"name": "lexical", "summary": "BM25 keyword search", "readme": "lexical"},
+    ]
+
+    class FakeVectorStore:
+        def similarity_search_with_score(self, query, k):
+            from langchain_core.documents import Document
+
+            return [(Document(page_content="semantic", metadata={"name": "semantic"}), 0.9)]
+
+    matches = _hybrid_project_search("BM25 keyword", projects, FakeVectorStore(), k=2)
+
+    assert [project["name"] for project, _ in matches] == ["semantic", "lexical"]
 
 
 def test_project_tool_delegates_to_project_subagent(monkeypatch):

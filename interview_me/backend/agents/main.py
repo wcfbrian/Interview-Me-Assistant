@@ -7,7 +7,7 @@ from interview_me.backend.agents.resume import get_general_info
 from interview_me.backend.config import settings, tracing_config
 
 
-def build_main_agent():
+def _build_main_agent():
     """Build the supervisor that owns tool selection and answer composition."""
     model = init_chat_model(settings.main_model, model_provider="openrouter")
     return create_agent(
@@ -15,17 +15,17 @@ def build_main_agent():
         tools=[get_general_info, get_project_detail],
         system_prompt=(
             "You are the main interview agent. Choose the resume tool for general "
-            "background questions and the project tool for project details. Use only "
-            "evidence returned by those tools. Merge evidence internally and compose "
+            "background questions and the project tool for project details. If user ask for random project, call the resume tool first. Only call the project tool if looking for detail. "
+            "Use only evidence returned by those tools. Merge evidence internally and compose "
             "a concise first-person answer. If no evidence supports the question, "
-            "answer exactly: No information found."
+            "answer exactly: I am not sure. Please rephrase your question."
         ),
     )
 
 
 def run_main_agent(messages: list[BaseMessage]) -> AIMessage:
     """Run the supervisor tool loop and return only its final answer message."""
-    response = build_main_agent().invoke(
+    response = _build_main_agent().invoke(
         {"messages": messages},
         config=tracing_config("interview-main-agent", "main-agent"),
     )
@@ -38,7 +38,7 @@ def run_main_agent(messages: list[BaseMessage]) -> AIMessage:
 
 async def stream_main_agent(messages: list[BaseMessage]):
     """Yield supervisor text chunks as they are generated."""
-    stream = build_main_agent().astream(
+    stream = _build_main_agent().astream(
         {"messages": messages},
         config=tracing_config("interview-main-agent", "main-agent"),
         stream_mode="messages",

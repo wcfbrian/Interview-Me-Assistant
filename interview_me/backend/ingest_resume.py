@@ -11,7 +11,7 @@ from interview_me.backend.config import settings
 
 class CandidateProfile(BaseModel):
     """Facts exposed to the resume subagent."""
-
+    name: str
     self_introduction: str
     working_background: str
     education: str

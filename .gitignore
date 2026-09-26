@@ -6,8 +6,12 @@ __pycache__/
 data/chroma/
 data/*.db
 data/*.sqlite*
+**/data/chroma/
+**/data/*.db
+**/data/*.sqlite*
 .pytest_cache/
 .chainlit/
 .files/
 **/__pycache__/
 .venv/
+data/

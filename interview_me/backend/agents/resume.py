@@ -9,6 +9,8 @@ from langchain.tools import ToolRuntime, tool
 from interview_me.backend.artifacts import load_profile
 from interview_me.backend.config import settings, tracing_config
 
+from langchain.agents.middleware import ToolCallLimitMiddleware
+
 
 class ProfileContext(TypedDict):
     name: str
@@ -63,21 +65,29 @@ def get_highlighted_project(runtime: ToolRuntime[ProfileContext]) -> str:
 def build_resume_agent():
     """Build the resume subagent with typed profile field tools."""
     model = init_chat_model(settings.main_model, model_provider="openrouter")
-    return create_agent(
-        model=model,
-        tools=[
+    tools = [
             get_name,
             get_self_introduction,
             get_working_background,
             get_education,
             get_skills,
             get_highlighted_project,
+        ]
+    return create_agent(
+        model=model,
+        tools=tools,
+        middleware=[
+            ToolCallLimitMiddleware(
+            tool_name=tool.__name__,
+            run_limit=1,
+            exit_behavior="continue",
+        ) for tool in tools
         ],
         context_schema=ProfileContext,
         system_prompt=(
             "You are the resume evidence subagent. Always call the field tool or "
             "tools relevant to the user's query.  Use only evidence returned by "
-            "those tools. Each tool can only be called once. Return related content only. Do not invent, summarize, or add facts."
+            "those tools. Return related content only. Do not invent, summarize, or add facts."
         ),
     )
 

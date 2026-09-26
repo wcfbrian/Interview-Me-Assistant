@@ -11,6 +11,8 @@ from interview_me.backend.artifacts import load_projects
 from interview_me.backend.config import settings, tracing_config
 from interview_me.backend.ingest_project import get_project_bm25, get_project_vector_store
 
+from langchain.agents.middleware import ToolCallLimitMiddleware
+
 
 def _tokens(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())

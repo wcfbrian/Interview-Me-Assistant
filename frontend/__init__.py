@@ -1,1 +1,0 @@
-"""Chainlit frontend package."""

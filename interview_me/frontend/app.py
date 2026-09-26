@@ -3,11 +3,25 @@
 import chainlit as cl
 from langchain_core.messages import HumanMessage
 
-from interview_me.backend.graph import graph
+from interview_me.backend.agents.main import stream_main_agent
+from interview_me.backend.graph import fixed_greeting, fixed_relevance_response, guard_route
 
 
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
-    result = await graph.ainvoke({"messages": [HumanMessage(content=message.content)]})
-    final_message = result["messages"][-1]
-    await cl.Message(content=str(final_message.content)).send()
+    messages = [HumanMessage(content=message.content)]
+    route = guard_route({"messages": messages})
+    if route == "greeting":
+        content = fixed_greeting({})["messages"][0].content
+        await cl.Message(content=str(content)).send()
+        return
+    if route == "irrelevant":
+        content = fixed_relevance_response({})["messages"][0].content
+        await cl.Message(content=str(content)).send()
+        return
+
+    response = cl.Message(content="")
+    await response.send()
+    async for token in stream_main_agent(messages):
+        await response.stream_token(token)
+    await response.update()

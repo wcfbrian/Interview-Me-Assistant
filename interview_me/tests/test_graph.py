@@ -3,13 +3,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from interview_me.backend.artifacts import load_profile, load_projects
-from interview_me.backend.decisions import AnswerDecision, GuardDecision
+from interview_me.backend.decisions import GuardDecision
 from interview_me.backend.ingest import ingest
 from interview_me.backend.ingest_project import ProjectSummary, index_projects
 from interview_me.backend.ingest_resume import CandidateProfile
+from interview_me.backend.agents.projects import get_project_detail
 
 
 def _mock_guard(query):
@@ -39,7 +40,6 @@ def test_graph_keeps_subagents_out_of_top_level_nodes():
         "main_agent",
         "fixed_greeting",
         "fixed_relevance_response",
-        "fixed_abstention",
     }
 
 
@@ -53,9 +53,8 @@ def test_artifacts_preserve_only_json_profile_and_projects(tmp_path):
     assert load_projects(projects_path)[0]["name"] == "demo"
 
 
-def test_decision_schemas_have_closed_categories():
+def test_guard_decision_has_closed_categories():
     assert GuardDecision(category="relevant", reason="candidate question").category == "relevant"
-    assert AnswerDecision(approved=True, grounded=True, responsive=True).unsupported_claims == []
 
 
 def test_project_summary_allows_fewer_than_300_words():
@@ -151,6 +150,21 @@ def test_index_projects_embeds_summaries_with_project_metadata(monkeypatch, tmp_
     assert vector_store.documents[0].page_content == "A retrieval project"
     assert vector_store.documents[0].metadata["name"] == "demo"
     assert vector_store.ids == ["project-0"]
+
+
+def test_project_tool_delegates_to_project_subagent(monkeypatch):
+    class FakeProjectAgent:
+        def invoke(self, payload, **kwargs):
+            assert payload["messages"][0]["content"] == "Tell me about RAG"
+            assert kwargs["config"]["run_name"] == "interview-project-agent"
+            return {"messages": [AIMessage(content='{"status": "found"}')]} 
+
+    monkeypatch.setattr(
+        "interview_me.backend.agents.projects.build_project_agent",
+        lambda: FakeProjectAgent(),
+    )
+
+    assert get_project_detail.invoke({"query": "Tell me about RAG"}) == '{"status": "found"}'
 
 
 def test_unavailable_guard_model_raises(monkeypatch):

@@ -15,6 +15,12 @@ class Settings:
     main_model: str = os.getenv("MAIN_MODEL", "deepseek/deepseek-v4.1-flash")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+    langsmith_tracing: bool = os.getenv(
+        "LANGSMITH_TRACING", os.getenv("LANGCHAIN_TRACING_V2", "false")
+    ).lower() == "true"
+    langsmith_project: str = os.getenv(
+        "LANGSMITH_PROJECT", os.getenv("LANGCHAIN_PROJECT", "interview-me")
+    )
     guard_model: str = os.getenv("GUARD_MODEL", "z-ai/glm-5.3-flash")
     evaluation_model: str = os.getenv("EVALUATION_MODEL", "typesafe/jev-1.13")
     github_username: str = os.getenv("GITHUB_USERNAME", "")
@@ -37,3 +43,15 @@ class Settings:
 
 
 settings = Settings()
+
+
+def tracing_config(run_name: str, component: str) -> dict:
+    """Return consistent LangSmith metadata for an agent invocation."""
+    return {
+        "run_name": run_name,
+        "tags": ["interview-me", component],
+        "metadata": {
+            "component": component,
+            "langsmith_project": settings.langsmith_project,
+        },
+    }

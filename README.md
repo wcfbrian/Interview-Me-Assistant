@@ -12,9 +12,7 @@ START -> guard conditional edge
 		 | greeting -> fixed greeting -> END
 		 | irrelevant -> fixed relevance response -> END
 		 | relevant -> main_agent
-					-> answer evaluator conditional edge
-						| approved -> END
-						| rejected -> fixed abstention -> END
+					-> END
 ```
 
 `resume_subagent` and `project_subagent` are tools of `main_agent`. They are not
@@ -47,38 +45,47 @@ and development dependencies from `uv.lock`.
 Set `OPENROUTER_API_KEY` in `.env` before running a live model request. Keep
 `.env` local and never commit it.
 
+To trace supervisor, subagent, tool, and model runs in LangSmith, set
+`LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT` in `.env`.
+
 The graph entry point is `interview_me.backend.graph:graph`.
 
-To ingest the real resume PDF and project index:
+## Run the agent
 
-```bash
-uv run python -m interview_me.backend.ingest
-uv run python -m interview_me.backend.evaluation.run
-uv run chainlit run interview_me/frontend/app.py
-```
-
-The ingest command extracts text from `RESUME_PATH`, uses the configured model to
-populate the closed candidate profile schema, and writes `profile.json`. It also
-validates the GitHub-generated `projects.json`. Override inputs with `--resume`,
-`--projects`, or `--output` when needed.
-
-To refresh public, non-fork repository artifacts using `GITHUB_USERNAME` from
-`.env`:
-
-```bash
-uv run python -m interview_me.backend.ingest_project
-```
-
-Pass `--regenerate-json` to the main ingest command to refresh both JSON artifacts:
+Configure `.env` with `OPENROUTER_API_KEY`, `GITHUB_USERNAME`, and the path to
+your resume PDF if it is not at `interview_me/backend/data/resume.pdf`. Then
+build the approved profile, project summaries, and Chroma semantic index:
 
 ```bash
 uv run python -m interview_me.backend.ingest --regenerate-json
 ```
 
-An explicit username may still be supplied as the positional argument.
+Start the Chainlit application:
 
-The guard and answer evaluator always use structured model calls. Unit tests mock
-these calls; live evaluation and runtime use `OPENROUTER_API_KEY`.
+```bash
+uv run chainlit run interview_me/frontend/app.py
+```
+
+Open the local URL printed by Chainlit, then ask questions about the candidate's
+background or projects. On later runs, use `uv run python -m
+interview_me.backend.ingest` to reuse existing JSON artifacts while refreshing
+the Chroma index; pass `--regenerate-json` whenever the resume or GitHub project
+data has changed.
+
+The ingest command extracts text from `RESUME_PATH`, uses the configured model to
+populate the closed candidate profile schema, and writes `profile.json`. It also
+generates `projects.json` from GitHub, embeds project summaries into Chroma, and
+writes all artifacts under `DATA_DIR`. Override the resume and output locations
+with `--input-resume` and `--output-dir`.
+
+To run the evaluation metrics separately:
+
+```bash
+uv run python -m interview_me.backend.evaluation.run
+```
+
+The guard uses a structured model call. Unit tests mock this call; live runtime
+uses `OPENROUTER_API_KEY`.
 
 Project summaries are embedded with `EMBEDDING_MODEL` through OpenRouter and
 persisted in `CHROMA_DIR`. The project subagent uses this Chroma index for

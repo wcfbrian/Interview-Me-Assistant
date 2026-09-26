@@ -1,10 +1,10 @@
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
 from interview_me.backend.agents.projects import get_project_detail
 from interview_me.backend.agents.resume import get_general_info
-from interview_me.backend.config import settings
+from interview_me.backend.config import settings, tracing_config
 
 
 def build_main_agent():
@@ -25,9 +25,28 @@ def build_main_agent():
 
 def run_main_agent(messages: list[BaseMessage]) -> AIMessage:
     """Run the supervisor tool loop and return only its final answer message."""
-    response = build_main_agent().invoke({"messages": messages})
+    response = build_main_agent().invoke(
+        {"messages": messages},
+        config=tracing_config("interview-main-agent", "main-agent"),
+    )
     return next(
         message
         for message in reversed(response["messages"])
         if isinstance(message, AIMessage)
     )
+
+
+async def stream_main_agent(messages: list[BaseMessage]):
+    """Yield supervisor text chunks as they are generated."""
+    stream = build_main_agent().astream(
+        {"messages": messages},
+        config=tracing_config("interview-main-agent", "main-agent"),
+        stream_mode="messages",
+    )
+    try:
+        async for chunk, _ in stream:
+            if isinstance(chunk, AIMessageChunk) and isinstance(chunk.content, str):
+                if chunk.content:
+                    yield chunk.content
+    finally:
+        await stream.aclose()

@@ -16,7 +16,7 @@ def get_project_detail(query: str) -> str:
     """Return project summaries whose approved README text matches the query."""
     query_terms = _terms(query)
     ranked = []
-    for project in load_projects(settings.project_index_path):
+    for project in load_projects(settings.project_path):
         text = " ".join(str(project.get(key, "")) for key in ("name", "summary", "readme"))
         score = len(query_terms & _terms(text))
         if score:

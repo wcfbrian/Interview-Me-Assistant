@@ -1,9 +1,15 @@
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from langchain_core.messages import HumanMessage
 
 from interview_me.backend.artifacts import load_profile, load_projects
 from interview_me.backend.decisions import AnswerDecision, GuardDecision
+from interview_me.backend.ingest import ingest
+from interview_me.backend.ingest_project import ProjectSummary, index_projects
+from interview_me.backend.ingest_resume import CandidateProfile
 
 
 def _mock_guard(query):
@@ -50,6 +56,101 @@ def test_artifacts_preserve_only_json_profile_and_projects(tmp_path):
 def test_decision_schemas_have_closed_categories():
     assert GuardDecision(category="relevant", reason="candidate question").category == "relevant"
     assert AnswerDecision(approved=True, grounded=True, responsive=True).unsupported_claims == []
+
+
+def test_project_summary_allows_fewer_than_300_words():
+    assert len(ProjectSummary(summary="word " * 299).summary.split()) == 299
+
+
+def test_project_summary_rejects_300_words():
+    with pytest.raises(ValueError, match="fewer than 300 words"):
+        ProjectSummary(summary="word " * 300)
+
+
+def test_ingest_generates_missing_project_index(monkeypatch, tmp_path):
+    output_dir = tmp_path / "output"
+    project_path = output_dir / "projects.json"
+    profile = CandidateProfile(
+        self_introduction="I build software.",
+        working_background="Engineering",
+        education="Computer science",
+        skills="Python",
+        highlighted_project="A project",
+    )
+    monkeypatch.setattr("interview_me.backend.ingest.extract_resume_text", lambda _: "resume")
+    monkeypatch.setattr("interview_me.backend.ingest.extract_profile", lambda _: profile)
+    monkeypatch.setattr(
+        "interview_me.backend.ingest.settings",
+        SimpleNamespace(github_username="candidate"),
+    )
+
+    def fake_sync(username, output, regenerate_json=False, token=""):
+        assert username == "candidate"
+        output.write_text('[{"name": "demo"}]', encoding="utf-8")
+        return 1
+
+    monkeypatch.setattr("interview_me.backend.ingest.pipeline", fake_sync)
+
+    ingest(tmp_path / "resume.pdf", output_dir)
+    assert json.loads((output_dir / "projects.json").read_text()) == [{"name": "demo"}]
+
+
+def test_ingest_regenerates_existing_project_index(monkeypatch, tmp_path):
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    project_path = output_dir / "projects.json"
+    project_path.write_text('[{"name": "old"}]', encoding="utf-8")
+    profile = CandidateProfile(
+        self_introduction="I build software.",
+        working_background="Engineering",
+        education="Computer science",
+        skills="Python",
+        highlighted_project="A project",
+    )
+    monkeypatch.setattr("interview_me.backend.ingest.extract_resume_text", lambda _: "resume")
+    monkeypatch.setattr("interview_me.backend.ingest.extract_profile", lambda _: profile)
+    monkeypatch.setattr(
+        "interview_me.backend.ingest.settings",
+        SimpleNamespace(github_username="candidate"),
+    )
+
+    def fake_sync(username, output, regenerate_json=False, token=""):
+        output.write_text('[{"name": "new"}]', encoding="utf-8")
+        return 1
+
+    monkeypatch.setattr("interview_me.backend.ingest.pipeline", fake_sync)
+
+    ingest(tmp_path / "resume.pdf", output_dir, regenerate_json=True)
+    assert json.loads(project_path.read_text()) == [{"name": "new"}]
+
+
+def test_index_projects_embeds_summaries_with_project_metadata(monkeypatch, tmp_path):
+    project_path = tmp_path / "projects.json"
+    project_path.write_text(
+        json.dumps([{
+            "name": "demo",
+            "summary": "A retrieval project",
+            "readme": "Full approved README",
+            "source_url": "https://github.com/example/demo",
+        }]),
+        encoding="utf-8",
+    )
+
+    class FakeVectorStore:
+        def add_documents(self, documents, ids):
+            self.documents = documents
+            self.ids = ids
+
+    vector_store = FakeVectorStore()
+    monkeypatch.setattr(
+        "interview_me.backend.ingest_project.reset_project_vector_store",
+        lambda: vector_store,
+    )
+
+    assert index_projects(project_path) == 1
+    assert vector_store.documents[0].page_content == "A retrieval project"
+    assert vector_store.documents[0].metadata["name"] == "demo"
+    assert vector_store.ids == ["project-0"]
 
 
 def test_unavailable_guard_model_raises(monkeypatch):

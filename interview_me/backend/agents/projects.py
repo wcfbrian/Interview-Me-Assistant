@@ -1,33 +1,28 @@
 import json
-import re
-
 from langchain.tools import tool
 
 from interview_me.backend.artifacts import load_projects
 from interview_me.backend.config import settings
-
-
-def _terms(value: str) -> set[str]:
-    return set(re.findall(r"[a-z0-9]+", value.lower()))
+from interview_me.backend.ingest_project import get_project_vector_store
 
 
 @tool
 def get_project_detail(query: str) -> str:
-    """Return project summaries whose approved README text matches the query."""
-    query_terms = _terms(query)
-    ranked = []
-    for project in load_projects(settings.project_index_path):
-        text = " ".join(str(project.get(key, "")) for key in ("name", "summary", "readme"))
-        score = len(query_terms & _terms(text))
-        if score:
-            ranked.append((score, project))
-    ranked.sort(key=lambda item: item[0], reverse=True)
+    """Return semantically relevant project evidence from the Chroma index."""
+    projects_by_name = {
+        str(project.get("name", "unknown")): project
+        for project in load_projects(settings.project_path)
+    }
+    matches = get_project_vector_store().similarity_search_with_relevance_scores(query, k=3)
     evidence = [
         {
-            "source": f"project:{project.get('name', 'unknown')}",
-            "text": project.get("readme") or project.get("summary", ""),
+            "source": f"project:{document.metadata.get('name', 'unknown')}",
+            "text": projects_by_name.get(
+                document.metadata.get("name", ""),
+                {"readme": document.page_content},
+            ).get("readme") or document.page_content,
             "score": score,
         }
-        for score, project in ranked[:3]
+        for document, score in matches
     ]
     return json.dumps({"status": "found" if evidence else "not_found", "evidence": evidence})

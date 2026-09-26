@@ -66,13 +66,23 @@ To refresh public, non-fork repository artifacts using `GITHUB_USERNAME` from
 `.env`:
 
 ```bash
-uv run python -m interview_me.backend.github_ingest
+uv run python -m interview_me.backend.ingest_project
+```
+
+Pass `--regenerate-json` to the main ingest command to refresh both JSON artifacts:
+
+```bash
+uv run python -m interview_me.backend.ingest --regenerate-json
 ```
 
 An explicit username may still be supplied as the positional argument.
 
 The guard and answer evaluator always use structured model calls. Unit tests mock
 these calls; live evaluation and runtime use `OPENROUTER_API_KEY`.
+
+Project summaries are embedded with `EMBEDDING_MODEL` through OpenRouter and
+persisted in `CHROMA_DIR`. The project subagent uses this Chroma index for
+semantic search and returns the matching approved README as evidence.
 
 For Docker:
 
@@ -84,5 +94,5 @@ docker compose up --build
 
 The graph, grounded artifact tools, ingestion commands, Chainlit adapter, Docker
 packaging, structured model decisions, and evaluation baseline are implemented.
-Chroma/BM25 hybrid retrieval and DeepEval/JEV integration remain
-the next accuracy-focused layer beyond the current local keyword index.
+BM25 hybrid retrieval and DeepEval/JEV integration remain the next
+accuracy-focused layer.

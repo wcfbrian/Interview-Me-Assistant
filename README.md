@@ -63,7 +63,7 @@ uv run python -m interview_me.backend.ingest --regenerate-json
 Start the Chainlit application:
 
 ```bash
-uv run chainlit run interview_me/frontend/app.py
+uv run chainlit run interview_me/frontend/app.py -w
 ```
 
 Open the local URL printed by Chainlit, then ask questions about the candidate's

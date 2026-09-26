@@ -3,6 +3,8 @@
 import argparse
 import base64
 import json
+import pickle
+import re
 import shutil
 from functools import lru_cache
 from pathlib import Path
@@ -13,8 +15,11 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel, field_validator
+from rank_bm25 import BM25Okapi
 
 from interview_me.backend.config import settings
+
+BM25_INDEX_FILENAME = "projects.bm25.pkl"
 
 
 class ProjectSummary(BaseModel):
@@ -79,15 +84,46 @@ def get_project_vector_store() -> Chroma:
 
 def reset_project_vector_store() -> Chroma:
     """Remove the dedicated project Chroma database and create a fresh one."""
+    get_project_bm25.cache_clear()
     if settings.chroma_dir.exists():
         shutil.rmtree(settings.chroma_dir)
     return get_project_vector_store()
+
+
+def _project_tokens(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _build_project_bm25(projects: list[dict[str, str]]) -> dict | None:
+    if not projects:
+        return None
+    corpus = [
+        " ".join(str(project.get(field, "")) for field in ("name", "readme"))
+        for project in projects
+    ]
+    tokenized_corpus = [_project_tokens(document) for document in corpus]
+    return {
+        "bm25": BM25Okapi(tokenized_corpus),
+        "tokenized_corpus": tokenized_corpus,
+    }
+
+
+@lru_cache(maxsize=1)
+def get_project_bm25() -> dict | None:
+    index_path = settings.chroma_dir / BM25_INDEX_FILENAME
+    if not index_path.exists():
+        return None
+    with index_path.open("rb") as handle:
+        return pickle.load(handle)
 
 
 def index_projects(projects_path: Path) -> int:
     """Embed project summaries and persist them in the Chroma project index."""
     projects = load_projects(projects_path)
     vector_store = reset_project_vector_store()
+    settings.chroma_dir.mkdir(parents=True, exist_ok=True)
+    with (settings.chroma_dir / BM25_INDEX_FILENAME).open("wb") as handle:
+        pickle.dump(_build_project_bm25(projects), handle)
     if not projects:
         return 0
     documents = [

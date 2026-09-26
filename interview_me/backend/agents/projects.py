@@ -6,11 +6,10 @@ from functools import lru_cache
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain.tools import tool
-from rank_bm25 import BM25Okapi
 
 from interview_me.backend.artifacts import load_projects
 from interview_me.backend.config import settings, tracing_config
-from interview_me.backend.ingest_project import get_project_vector_store
+from interview_me.backend.ingest_project import get_project_bm25, get_project_vector_store
 
 
 def _tokens(text: str) -> list[str]:
@@ -21,14 +20,25 @@ def _semantic_project_search(query: str, vector_store, candidate_count: int):
     return vector_store.similarity_search_with_score(query, k=candidate_count)
 
 
-def _lexical_project_search(query: str, projects: list[dict[str, str]], candidate_count: int):
-    corpus = [
-        f"{project.get('name', '')} {project.get('summary', '')} {project.get('readme', '')}"
-        for project in projects
-    ]
-    tokenized_corpus = [_tokens(document) for document in corpus]
+def _lexical_project_search(
+    query: str,
+    projects: list[dict[str, str]],
+    candidate_count: int,
+    bm25_index: dict | None = None,
+):
     query_tokens = set(_tokens(query))
-    bm25 = BM25Okapi(tokenized_corpus)
+    if (
+        not isinstance(bm25_index, dict)
+        or "bm25" not in bm25_index
+        or "tokenized_corpus" not in bm25_index
+        or bm25_index["bm25"].corpus_size != len(projects)
+    ):
+        raise RuntimeError(
+            "Persisted BM25 project index is missing; "
+            "run project ingestion before searching."
+        )
+    bm25 = bm25_index["bm25"]
+    tokenized_corpus = bm25_index["tokenized_corpus"]
     lexical_scores = bm25.get_scores(list(query_tokens))
     lexical_order = sorted(
         range(len(projects)),
@@ -55,7 +65,7 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
             _semantic_project_search, query, vector_store, candidate_count
         )
         lexical_future = executor.submit(
-            _lexical_project_search, query, projects, candidate_count
+            _lexical_project_search, query, projects, candidate_count, get_project_bm25()
         )
         vector_matches = semantic_future.result()
         lexical_order = lexical_future.result()
@@ -113,7 +123,7 @@ def build_project_agent():
         tools=[_retrieve_project_evidence],
         system_prompt=(
             "You are the project evidence subagent. Always call the retrieval tool. "
-            "Return its JSON result unchanged. Do not invent, summarize, or add facts."
+            "Return related content only. Do not invent, or add facts."
         ),
     )
 

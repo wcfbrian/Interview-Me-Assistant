@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from interview_me.backend.ingest.ingest_project import ProjectSummary, index_projects, pipeline
+from src.backend.ingest.ingest_project import ProjectSummary, index_projects, pipeline
 
 
 # Verifies summaries below the limit are accepted by constructing a 299-word project summary.
@@ -38,7 +38,7 @@ def test_index_projects_embeds_summaries_with_project_metadata(monkeypatch, tmp_
 
     vector_store = FakeVectorStore()
     monkeypatch.setattr(
-        "interview_me.backend.ingest.ingest_project.reset_project_vector_store",
+        "src.backend.ingest.ingest_project.reset_project_vector_store",
         lambda: vector_store,
     )
 
@@ -65,9 +65,9 @@ def test_project_pipeline_persists_github_project_id(monkeypatch, tmp_path):
             }]
         return {"content": base64.b64encode(b"# Demo").decode("ascii")}
 
-    monkeypatch.setattr("interview_me.backend.ingest.ingest_project._get_json", fake_get_json)
-    monkeypatch.setattr("interview_me.backend.ingest.ingest_project.summarize_readme", lambda _: "Demo")
-    monkeypatch.setattr("interview_me.backend.ingest.ingest_project.index_projects", lambda _: 1)
+    monkeypatch.setattr("src.backend.ingest.ingest_project._get_json", fake_get_json)
+    monkeypatch.setattr("src.backend.ingest.ingest_project.summarize_readme", lambda _: "Demo")
+    monkeypatch.setattr("src.backend.ingest.ingest_project.index_projects", lambda _: 1)
 
     pipeline("candidate", project_path)
 

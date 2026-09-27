@@ -1,8 +1,8 @@
 import json
 from types import SimpleNamespace
 
-from interview_me.backend.ingest import ingest
-from interview_me.backend.ingest.ingest_resume import CandidateProfile
+from src.backend.ingest import ingest
+from src.backend.ingest.ingest_resume import CandidateProfile
 
 
 def _profile() -> CandidateProfile:
@@ -20,10 +20,10 @@ def _profile() -> CandidateProfile:
 def test_ingest_generates_missing_project_index(monkeypatch, tmp_path):
     output_dir = tmp_path / "output"
     project_path = output_dir / "projects.json"
-    monkeypatch.setattr("interview_me.backend.ingest.extract_resume_text", lambda _: "resume")
-    monkeypatch.setattr("interview_me.backend.ingest.extract_profile", lambda _: _profile())
+    monkeypatch.setattr("src.backend.ingest.extract_resume_text", lambda _: "resume")
+    monkeypatch.setattr("src.backend.ingest.extract_profile", lambda _: _profile())
     monkeypatch.setattr(
-        "interview_me.backend.ingest.settings",
+        "src.backend.ingest.settings",
         SimpleNamespace(github_username="candidate"),
     )
 
@@ -32,7 +32,7 @@ def test_ingest_generates_missing_project_index(monkeypatch, tmp_path):
         output.write_text('[{"name": "demo"}]', encoding="utf-8")
         return 1
 
-    monkeypatch.setattr("interview_me.backend.ingest.pipeline", fake_sync)
+    monkeypatch.setattr("src.backend.ingest.pipeline", fake_sync)
 
     ingest(tmp_path / "resume.pdf", output_dir)
 
@@ -45,10 +45,10 @@ def test_ingest_regenerates_existing_project_index(monkeypatch, tmp_path):
     output_dir.mkdir()
     project_path = output_dir / "projects.json"
     project_path.write_text('[{"name": "old"}]', encoding="utf-8")
-    monkeypatch.setattr("interview_me.backend.ingest.extract_resume_text", lambda _: "resume")
-    monkeypatch.setattr("interview_me.backend.ingest.extract_profile", lambda _: _profile())
+    monkeypatch.setattr("src.backend.ingest.extract_resume_text", lambda _: "resume")
+    monkeypatch.setattr("src.backend.ingest.extract_profile", lambda _: _profile())
     monkeypatch.setattr(
-        "interview_me.backend.ingest.settings",
+        "src.backend.ingest.settings",
         SimpleNamespace(github_username="candidate"),
     )
 
@@ -56,7 +56,7 @@ def test_ingest_regenerates_existing_project_index(monkeypatch, tmp_path):
         output.write_text('[{"name": "new"}]', encoding="utf-8")
         return 1
 
-    monkeypatch.setattr("interview_me.backend.ingest.pipeline", fake_sync)
+    monkeypatch.setattr("src.backend.ingest.pipeline", fake_sync)
 
     ingest(tmp_path / "resume.pdf", output_dir, regenerate_json=True)
 

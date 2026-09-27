@@ -5,7 +5,7 @@ import asyncio
 import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 
-from interview_me.backend.graph import graph
+from src.backend.graph import graph
 
 
 

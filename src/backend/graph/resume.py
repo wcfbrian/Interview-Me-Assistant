@@ -7,8 +7,8 @@ from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain.tools import ToolRuntime, tool
 
-from interview_me.backend.artifacts import load_profile
-from interview_me.backend.config import settings, tracing_config
+from src.backend.artifacts import load_profile
+from src.backend.config import settings, tracing_config
 
 
 class ProfileContext(TypedDict):

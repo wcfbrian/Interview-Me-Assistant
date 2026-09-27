@@ -1,4 +1,4 @@
-from interview_me.backend.artifacts import load_profile, load_projects
+from src.backend.artifacts import load_profile, load_projects
 
 
 # Verifies JSON artifact loaders preserve profile fields and project records using temporary JSON files.

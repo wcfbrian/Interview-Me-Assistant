@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from interview_me.backend.graph.decisions import GuardDecision, classify_with_model
-from interview_me.backend.graph import guard_route, build_graph
-from interview_me.backend.graph.main import MAIN_AGENT_PROMPT
+from src.backend.graph.decisions import GuardDecision, classify_with_model
+from src.backend.graph import guard_route, build_graph
+from src.backend.graph.main import MAIN_AGENT_PROMPT
 
 
 def _mock_guard(query):
@@ -19,7 +19,7 @@ def _mock_guard(query):
 
 # Verifies interview questions reach the main route by replacing model classification with a safe decision.
 def test_guard_routes_interview_question_to_main_agent(monkeypatch):
-    monkeypatch.setattr("interview_me.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="Tell me about your projects")]}) == "safe"
 
 
@@ -31,7 +31,7 @@ def test_guard_passes_conversation_context_for_followup(monkeypatch):
         captured["context"] = context
         return GuardDecision(category="safe")
 
-    monkeypatch.setattr("interview_me.backend.graph.classify_with_model", fake_guard)
+    monkeypatch.setattr("src.backend.graph.classify_with_model", fake_guard)
     route = guard_route({
         "messages": [
             HumanMessage(content="Tell me about your projects"),
@@ -47,13 +47,13 @@ def test_guard_passes_conversation_context_for_followup(monkeypatch):
 
 # Verifies candidate-name questions are allowed by evaluating the deterministic safe guard substitute.
 def test_guard_allows_candidate_name_question(monkeypatch):
-    monkeypatch.setattr("interview_me.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="What is your name?")]}) == "safe"
 
 
 # Verifies greetings bypass the main agent by evaluating the deterministic greeting guard substitute.
 def test_guard_routes_greeting_to_fixed_response(monkeypatch):
-    monkeypatch.setattr("interview_me.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="hello")]}) == "greeting"
 
 
@@ -94,7 +94,7 @@ def test_type_safe_guard_selects_highest_probability(monkeypatch):
                 }
             )
 
-    monkeypatch.setattr("interview_me.backend.graph.decisions.TypeSafeClassifier", FakeClassifier)
+    monkeypatch.setattr("src.backend.graph.decisions.TypeSafeClassifier", FakeClassifier)
     assert classify_with_model("hello") == GuardDecision(category="greeting")
     assert set(captured["request"]["questions"]) == {"category"}
     criteria = captured["request"]["questions"]["category"].criteria
@@ -107,8 +107,8 @@ def test_unavailable_guard_model_raises(monkeypatch):
     def unavailable(*args, **kwargs):
         raise ConnectionError("provider unavailable")
 
-    monkeypatch.setattr("interview_me.backend.graph.decisions.TypeSafeClassifier", unavailable)
+    monkeypatch.setattr("src.backend.graph.decisions.TypeSafeClassifier", unavailable)
     with pytest.raises(RuntimeError, match="Guard model is unavailable"):
-        from interview_me.backend.graph.decisions import classify_with_model
+        from src.backend.graph.decisions import classify_with_model
 
         classify_with_model("Tell me about your experience")

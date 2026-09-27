@@ -8,9 +8,9 @@ from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain.tools import tool
 
-from interview_me.backend.artifacts import load_projects
-from interview_me.backend.config import settings, tracing_config
-from interview_me.backend.ingest import get_project_bm25, get_project_vector_store
+from src.backend.artifacts import load_projects
+from src.backend.config import settings, tracing_config
+from src.backend.ingest import get_project_bm25, get_project_vector_store
 
 
 def _tokens(text: str) -> list[str]:

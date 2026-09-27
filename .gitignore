@@ -15,7 +15,7 @@ data/*.sqlite*
 **/__pycache__/
 .venv/
 data/
-/interview_me/backend/data/*
+/src/backend/data/*
 .streamlit/
 .deepeval/
 artifacts/**

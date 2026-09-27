@@ -27,8 +27,8 @@ class Settings:
     )
     evaluation_model: str = os.getenv("EVALUATION_MODEL", "typesafe/jev-1.13")
     github_username: str = os.getenv("GITHUB_USERNAME", "")
-    data_dir: Path = Path(os.getenv("DATA_DIR", "interview_me/backend/data"))
-    chroma_dir: Path = Path(os.getenv("CHROMA_DIR", "interview_me/backend/data/chroma"))
+    data_dir: Path = Path(os.getenv("DATA_DIR", "src/backend/data"))
+    chroma_dir: Path = Path(os.getenv("CHROMA_DIR", "src/backend/data/chroma"))
     max_project_searches: int = int(os.getenv("MAX_PROJECT_SEARCHES", "2"))
     max_readme_fetches: int = int(os.getenv("MAX_README_FETCHES", "2"))
 

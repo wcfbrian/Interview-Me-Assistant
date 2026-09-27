@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from interview_me.backend.config import settings
+from src.backend.config import settings
 from .ingest_project import (
     get_project_bm25,
     get_project_vector_store,

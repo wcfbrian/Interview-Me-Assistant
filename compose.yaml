@@ -6,4 +6,4 @@ services:
     env_file:
       - .env
     volumes:
-      - ./interview_me/backend/data:/app/interview_me/backend/data
+      - ./src/backend/data:/app/src/backend/data

@@ -7,7 +7,7 @@ from langchain_core._api.beta_decorator import LangChainBetaWarning
 from langchain_typesafe import Choice, TypeSafeClassifier
 from pydantic import BaseModel
 
-from interview_me.backend.config import settings, tracing_config
+from src.backend.config import settings, tracing_config
 
 warnings.filterwarnings(
     "ignore",

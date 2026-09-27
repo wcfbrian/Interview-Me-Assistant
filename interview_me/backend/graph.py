@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, MessagesState, StateGraph
 
-from interview_me.backend.agents.main import run_main_agent
+from interview_me.backend.agents.main import _build_main_agent
+from interview_me.backend.config import tracing_config
 from interview_me.backend.decisions import classify_with_model
 
 GuardRoute = Literal["safe", "greeting", "prohibited"]
@@ -44,9 +46,23 @@ def fixed_relevance_response(_: MessagesState) -> dict[str, list[BaseMessage]]:
     return {"messages": [AIMessage(content="Please ask relevant questions to interview me.")]}
 
 
-def main_agent(state: MessagesState) -> dict[str, list[BaseMessage]]:
-    """Call the supervisor; its tools return evidence into the same message loop."""
-    return {"messages": [run_main_agent(state["messages"])]}
+async def main_agent(state: MessagesState) -> dict[str, list[BaseMessage]]:
+    """Stream the supervisor's final answer while preserving the graph message state."""
+    writer = get_stream_writer()
+    answer_parts: list[str] = []
+
+    async for chunk, _ in _build_main_agent().astream(
+        {"messages": state["messages"]},
+        config=tracing_config("interview-main-agent", "main-agent"),
+        stream_mode="messages",
+    ):
+        if not isinstance(chunk, AIMessageChunk) or not isinstance(chunk.content, str):
+            continue
+        if chunk.content:
+            answer_parts.append(chunk.content)
+            writer(chunk.content)
+
+    return {"messages": [AIMessage(content="".join(answer_parts))]}
 
 
 def build_graph():

@@ -24,7 +24,7 @@ The repository is organized by runtime responsibility:
 ```text
 interview_me/
 ├── backend/         # graph, agents, ingestion, and evaluation
-└── frontend/        # Chainlit presentation layer
+└── frontend/        # Streamlit presentation layer
 interview_me/backend/data/ # local profile, resume, and project artifacts
 interview_me/tests/        # unit and graph contract tests
 ```
@@ -60,10 +60,10 @@ build the approved profile, project summaries, and Chroma semantic index:
 uv run python -m interview_me.backend.ingest --regenerate-json
 ```
 
-Start the Chainlit application:
+Start the Streamlit application:
 
 ```bash
-uv run chainlit run interview_me/frontend/app.py -w
+uv run streamlit run interview_me/frontend/app.py
 ```
 
 Open the local URL printed by Chainlit, then ask questions about the candidate's
@@ -101,6 +101,6 @@ docker compose up --build
 ## Current scope
 
 The graph, grounded artifact tools, hybrid project retrieval, ingestion commands,
-Chainlit adapter, Docker packaging, structured model decisions, and evaluation
+Streamlit adapter, Docker packaging, structured model decisions, and evaluation
 baseline are implemented. DeepEval/JEV integration remains the next
 accuracy-focused layer.

@@ -1,21 +1,30 @@
-"""Chainlit adapter for the compiled interview graph."""
+"""Streamlit adapter for the compiled interview graph."""
 
-import chainlit as cl
+import asyncio
+
+import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 
 from interview_me.backend.graph import graph
 
 
-@cl.on_message
-async def on_message(message: cl.Message) -> None:
-    history = cl.user_session.get("messages") or []
-    messages = [*history, HumanMessage(content=message.content)]
-    final_message: AIMessage | None = None
 
-    async for update in graph.astream(
+async def generate_response(
+    messages: list[AIMessage | HumanMessage],
+    placeholder: st.delta_generator.DeltaGenerator,
+) -> AIMessage:
+    final_message: AIMessage | None = None
+    response = ""
+
+    async for mode, update in graph.astream(
         {"messages": messages},
-        stream_mode="updates",
+        stream_mode=["custom", "updates"],
     ):
+        if mode == "custom":
+            response += str(update)
+            placeholder.markdown(response)
+            continue
+
         for node_update in update.values():
             node_messages = node_update.get("messages", [])
             if node_messages:
@@ -23,5 +32,32 @@ async def on_message(message: cl.Message) -> None:
 
     if final_message is None:
         final_message = AIMessage(content="No response generated.")
-    await cl.Message(content=str(final_message.content)).send()
-    cl.user_session.set("messages", [*messages, final_message])
+    if not response:
+        placeholder.markdown(str(final_message.content))
+
+    return final_message
+
+
+st.set_page_config(page_title="Interview Me", page_icon="💬")
+st.title("Interview Me")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for message in st.session_state.messages:
+    role = "assistant" if isinstance(message, AIMessage) else "user"
+    with st.chat_message(role):
+        st.markdown(str(message.content))
+
+if prompt := st.chat_input("Ask interview questions..."):
+    history = st.session_state.messages
+    messages = [*history, HumanMessage(content=prompt)]
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        final_message = asyncio.run(generate_response(messages, response_placeholder))
+
+    st.session_state.messages = [*messages, final_message]

@@ -13,7 +13,7 @@ from langchain.chat_models import init_chat_model
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from rank_bm25 import BM25Okapi
 
 from ..config import settings
@@ -22,7 +22,7 @@ BM25_INDEX_FILENAME = "projects.bm25.pkl"
 
 
 class ProjectSummary(BaseModel):
-    summary: str
+    summary: str = Field(..., description="A concise summary of the project. Limit to 300 words.")
 
     @field_validator("summary")
     @classmethod
@@ -45,9 +45,9 @@ def summarize_readme(readme: str) -> str:
             "role": "system",
             "content": (
                 "Summarize a GitHub README for project retrieval. Include the "
-                "project's purpose, important technologies, and notable capabilities. Generate key words below the summary that capture the essence of the project."
+                "project's purpose, important technologies, and notable capabilities."
                 "Use only facts in the README. Keep the summary below 300 words."
-                "Format:\nSummary: <summary text>\nKeywords: <comma-separated keywords>"
+                "Format:\nSummary: <summary text>"
             ),
         },
         {"role": "user", "content": readme},

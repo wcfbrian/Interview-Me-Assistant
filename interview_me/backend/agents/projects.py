@@ -56,7 +56,21 @@ def _lexical_project_search(
 
 
 def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_store, k: int = 3):
-    """Fuse Chroma semantic ranks with BM25 lexical ranks using reciprocal rank fusion."""
+    """Return the top projects by combining semantic and lexical rankings.
+
+    Chroma and BM25 each provide candidate IDs. Reciprocal rank fusion combines
+    their rankings so projects found by both search methods receive contributions
+    from both lists.
+
+    Args:
+        query: Search text used by both retrieval methods.
+        projects: Projects used to validate lexical IDs and resolve valid results.
+        vector_store: Chroma vector store used for semantic retrieval.
+        k: Maximum number of ranked project results to return.
+
+    Returns:
+        A list of ``(project_id, rrf_score)`` tuples in descending score order.
+    """
     candidate_count = max(k * 2, 6)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -79,10 +93,9 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
 
     for rank, (document, _) in enumerate(vector_matches, start=1):
         project_id = str(document.metadata.get("project_id", ""))
-        if project_id in projects_by_id:
-            ranked.setdefault(project_id, {"rrf_score": 0.0})["rrf_score"] += (
-                semantic_weight / (fusion_constant + rank)
-            )
+        ranked.setdefault(project_id, {"rrf_score": 0.0})["rrf_score"] += (
+            semantic_weight / (fusion_constant + rank)
+        )
 
     for rank, project_id in enumerate(lexical_order, start=1):
         if project_id in projects_by_id:
@@ -91,10 +104,11 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
             )
 
     return [
-        (projects_by_id[project_id], values["rrf_score"])
+        (project_id, values["rrf_score"])
         for project_id, values in heapq.nlargest(
             k, ranked.items(), key=lambda item: item[1]["rrf_score"]
         )
+        if project_id in projects_by_id
     ]
 
 
@@ -102,14 +116,18 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
 def _retrieve_project_evidence(query: str) -> str:
     """Return project evidence from fused semantic and lexical retrieval."""
     projects = load_projects(settings.project_path)
+    projects_by_id = {
+        str(project.get("project_id", "")): project
+        for project in projects
+    }
     matches = _hybrid_project_search(query, projects, get_project_vector_store())
     evidence = [
         {
-            "source": f"project:{project.get('name', 'unknown')}",
-            "text": project.get("readme") or project.get("summary", ""),
+            "source": f"project:{projects_by_id[project_id].get('name', 'unknown')}",
+            "text": projects_by_id[project_id].get("readme") or projects_by_id[project_id].get("summary", ""),
             "score": score,
         }
-        for project, score in matches
+        for project_id, score in matches
     ]
     return json.dumps({"status": "found" if evidence else "not_found", "evidence": evidence})
 

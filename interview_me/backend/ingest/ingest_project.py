@@ -103,7 +103,6 @@ def _build_project_bm25(projects: list[dict[str, str]]) -> dict | None:
     tokenized_corpus = [_project_tokens(document) for document in corpus]
     return {
         "bm25": BM25Okapi(tokenized_corpus),
-        "tokenized_corpus": tokenized_corpus,
         "project_ids": [str(project["project_id"]) for project in projects],
     }
 

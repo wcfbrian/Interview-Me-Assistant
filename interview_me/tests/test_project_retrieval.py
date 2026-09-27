@@ -41,14 +41,14 @@ def test_hybrid_project_search_combines_vector_and_lexical_results(monkeypatch):
         "interview_me.backend.agents.projects.get_project_bm25",
         lambda: {
             "bm25": BM25Okapi(tokenized_corpus),
-            "tokenized_corpus": tokenized_corpus,
             "project_ids": [project["project_id"] for project in projects],
         },
     )
 
     matches = _hybrid_project_search("BM25 keyword", projects, FakeVectorStore(), k=2)
 
-    assert [project["name"] for project, _ in matches] == ["semantic", "lexical"]
+    assert [project_id for project_id, _ in matches] == ["github-1", "github-2"]
+    assert all(score > 0 for _, score in matches)
 
 
 # Verifies the public project tool delegates to its subagent by substituting an agent that asserts the invocation payload.

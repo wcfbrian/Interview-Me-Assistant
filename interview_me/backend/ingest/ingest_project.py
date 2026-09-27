@@ -104,11 +104,13 @@ def _build_project_bm25(projects: list[dict[str, str]]) -> dict | None:
     return {
         "bm25": BM25Okapi(tokenized_corpus),
         "tokenized_corpus": tokenized_corpus,
+        "project_ids": [str(project["project_id"]) for project in projects],
     }
 
 
 @lru_cache(maxsize=1)
 def get_project_bm25() -> dict | None:
+    """Return the cached BM25 index for projects, if it exists."""
     index_path = settings.chroma_dir / BM25_INDEX_FILENAME
     if not index_path.exists():
         return None
@@ -119,6 +121,12 @@ def get_project_bm25() -> dict | None:
 def index_projects(projects_path: Path) -> int:
     """Embed project summaries and persist them in the Chroma project index."""
     projects = load_projects(projects_path)
+    project_ids = [str(project.get("project_id", "")) for project in projects]
+    if not all(project_ids) or len(set(project_ids)) != len(project_ids):
+        raise ValueError(
+            "Each project must have a unique project_id; run project ingestion with "
+            "--regenerate-json."
+        )
     vector_store = reset_project_vector_store()
     settings.chroma_dir.mkdir(parents=True, exist_ok=True)
     with (settings.chroma_dir / BM25_INDEX_FILENAME).open("wb") as handle:
@@ -129,6 +137,7 @@ def index_projects(projects_path: Path) -> int:
         Document(
             page_content=str(project.get("summary", "")),
             metadata={
+                "project_id": str(project["project_id"]),
                 "name": str(project.get("name", "unknown")),
                 "source_url": str(project.get("source_url", "")),
             },
@@ -137,7 +146,7 @@ def index_projects(projects_path: Path) -> int:
     ]
     vector_store.add_documents(
         documents,
-        ids=[f"project-{index}" for index in range(len(documents))],
+        ids=project_ids,
     )
     return len(documents)
 
@@ -170,6 +179,7 @@ def pipeline(username: str, output: Path, regenerate_json: bool = False, token: 
                 print(f"[skip] {repository.get('name', 'unknown')}: README unavailable ({exc})")
                 continue
             projects.append({
+                "project_id": f"github-{repository['id']}",
                 "name": repository["name"],
                 "summary": summarize_readme(content),
                 "readme": content,

@@ -26,12 +26,16 @@ def _lexical_project_search(
     query: str,
     projects: list[dict[str, str]],
     candidate_count: int,
-    bm25_index: dict | None = None,
 ):
+
+    bm25_index = get_project_bm25()
+
     # 1. Validate that the persisted BM25 index matches the current projects.
+    project_ids = [str(project.get("project_id", "")) for project in projects]
     if (
         not isinstance(bm25_index, dict)
         or "bm25" not in bm25_index
+        or bm25_index.get("project_ids") != project_ids
         or bm25_index["bm25"].corpus_size != len(projects)
     ):
         raise RuntimeError(
@@ -48,26 +52,25 @@ def _lexical_project_search(
         key=lambda x: x[1],  # Sort by score
     )
 
-    # 3. Prefer positive BM25 matches; if none exist, preserve the ranked fallback.
-    matches = [index for index, score in ranked if score > 0]
-    return matches or [index for index, score in ranked]
+    return [project_ids[index] for index, score in ranked]
 
 
 def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_store, k: int = 3):
     """Fuse Chroma semantic ranks with BM25 lexical ranks using reciprocal rank fusion."""
     candidate_count = max(k * 2, 6)
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         semantic_future = executor.submit(
             _semantic_project_search, query, vector_store, candidate_count
         )
         lexical_future = executor.submit(
-            _lexical_project_search, query, projects, candidate_count, get_project_bm25()
+            _lexical_project_search, query, projects, candidate_count
         )
         vector_matches = semantic_future.result()
         lexical_order = lexical_future.result()
-    project_indexes = {
-        str(project.get("name", "unknown")): index
-        for index, project in enumerate(projects)
+    projects_by_id = {
+        str(project.get("project_id", "")): project
+        for project in projects
     }
     ranked: dict[int, dict] = {}
     fusion_constant = 60
@@ -75,22 +78,23 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
     lexical_weight = 1.0
 
     for rank, (document, _) in enumerate(vector_matches, start=1):
-        index = project_indexes.get(str(document.metadata.get("name", "")))
-        if index is not None:
-            ranked.setdefault(index, {"rrf_score": 0.0})["rrf_score"] += (
+        project_id = str(document.metadata.get("project_id", ""))
+        if project_id in projects_by_id:
+            ranked.setdefault(project_id, {"rrf_score": 0.0})["rrf_score"] += (
                 semantic_weight / (fusion_constant + rank)
             )
 
-    for rank, index in enumerate(lexical_order, start=1):
-        ranked.setdefault(index, {"rrf_score": 0.0})["rrf_score"] += (
-            lexical_weight / (fusion_constant + rank)
-        )
+    for rank, project_id in enumerate(lexical_order, start=1):
+        if project_id in projects_by_id:
+            ranked.setdefault(project_id, {"rrf_score": 0.0})["rrf_score"] += (
+                lexical_weight / (fusion_constant + rank)
+            )
 
     return [
-        (projects[index], values["rrf_score"])
-        for index, values in sorted(
-            ranked.items(), key=lambda item: item[1]["rrf_score"], reverse=True
-        )[:k]
+        (projects_by_id[project_id], values["rrf_score"])
+        for project_id, values in heapq.nlargest(
+            k, ranked.items(), key=lambda item: item[1]["rrf_score"]
+        )
     ]
 
 

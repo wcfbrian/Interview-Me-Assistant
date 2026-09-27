@@ -1,8 +1,10 @@
 import base64
+from dataclasses import replace
 import json
 
 import pytest
 
+from src.backend.config import settings
 from src.backend.ingest.ingest_project import ProjectSummary, index_projects, pipeline
 
 
@@ -20,6 +22,10 @@ def test_project_summary_rejects_300_words():
 # Verifies indexing writes summary content and project identity into Chroma by capturing added documents in a fake store.
 def test_index_projects_embeds_summaries_with_project_metadata(monkeypatch, tmp_path):
     project_path = tmp_path / "projects.json"
+    monkeypatch.setattr(
+        "src.backend.ingest.ingest_project.settings",
+        replace(settings, chroma_dir=tmp_path / "chroma"),
+    )
     project_path.write_text(
         json.dumps([{
             "project_id": "github-1",

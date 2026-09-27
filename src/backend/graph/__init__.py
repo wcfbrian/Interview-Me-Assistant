@@ -52,7 +52,7 @@ def fixed_greeting(state: MessagesState) -> dict[str, list[BaseMessage]]:
 
 
 def fixed_relevance_response(_: MessagesState) -> dict[str, list[BaseMessage]]:
-    return {"messages": [AIMessage(content="Please ask relevant questions to interview me.")]}
+    return {"messages": [AIMessage(content="I am sorry. I am not sure. Please ask another question.")]}
 
 
 async def main_agent(state: MessagesState) -> dict[str, list[BaseMessage]]:

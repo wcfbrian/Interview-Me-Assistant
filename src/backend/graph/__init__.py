@@ -37,8 +37,18 @@ def guard_route(state: MessagesState) -> GuardRoute:
     return category
 
 
-def fixed_greeting(_: MessagesState) -> dict[str, list[BaseMessage]]:
-    return {"messages": [AIMessage(content="Hello. Welcome to interview me.")]}
+def fixed_greeting(state: MessagesState) -> dict[str, list[BaseMessage]]:
+    """Return a concise response for common greeting patterns."""
+    latest_message = state["messages"][-1] if state["messages"] else None
+
+    greeting = str(latest_message.content).strip().lower() if latest_message else ""
+
+    if greeting.rstrip("?!., ") in {"how are you", "how are you doing", "how is it going"}:
+        response = "I am fine. Thank you for asking."
+    else:
+        response = "Hello. Welcome to interview me."
+
+    return {"messages": [AIMessage(content=response)]}
 
 
 def fixed_relevance_response(_: MessagesState) -> dict[str, list[BaseMessage]]:

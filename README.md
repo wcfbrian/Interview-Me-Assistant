@@ -78,7 +78,6 @@ generates `projects.json` from GitHub, embeds project summaries into Chroma, and
 writes all artifacts under `DATA_DIR`. Override the resume and output locations
 with `--input-resume` and `--output-dir`.
 
-
 For Docker:
 
 ```bash

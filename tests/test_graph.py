@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from langchain_core.messages import AIMessage, HumanMessage
 
 from src.backend.graph.decisions import GuardDecision, classify_with_model
-from src.backend.graph import guard_route, build_graph
+from src.backend.graph import build_graph, fixed_greeting, guard_route
 from src.backend.graph.main import MAIN_AGENT_PROMPT
 
 
@@ -55,6 +55,14 @@ def test_guard_allows_candidate_name_question(monkeypatch):
 def test_guard_routes_greeting_to_fixed_response(monkeypatch):
     monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="hello")]}) == "greeting"
+
+
+def test_fixed_greeting_handles_common_greeting_patterns():
+    greeting = fixed_greeting({"messages": [HumanMessage(content="Good morning!")]})
+    check_in = fixed_greeting({"messages": [HumanMessage(content="How are you?")]})
+
+    assert greeting["messages"][0].content == "Hello. Welcome to interview me."
+    assert check_in["messages"][0].content == "I am fine. Thank you for asking."
 
 
 # Verifies the compiled graph exposes only top-level workflow nodes by inspecting its node set.

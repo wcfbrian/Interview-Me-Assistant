@@ -26,7 +26,7 @@ def classify_with_model(query: str) -> GuardDecision:
             api_key=settings.openrouter_api_key,
             base_url=settings.typesafe_base_url,
             model=settings.guard_model,
-        )
+        )     
         result = classifier.invoke(
             {
                 "state": query,

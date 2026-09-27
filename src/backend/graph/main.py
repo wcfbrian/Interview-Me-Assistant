@@ -19,7 +19,7 @@ MAIN_AGENT_PROMPT = (
 
 
 @lru_cache(maxsize=1)
-def _build_main_agent():
+def build_main_agent():
     """Build the supervisor that owns tool selection and answer composition."""
     model = init_chat_model(settings.main_model, model_provider="openrouter")
     return create_agent(

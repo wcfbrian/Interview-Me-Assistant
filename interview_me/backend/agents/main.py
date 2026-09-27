@@ -1,4 +1,5 @@
 from langchain.agents import create_agent
+from functools import lru_cache
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
@@ -6,7 +7,7 @@ from interview_me.backend.agents.projects import get_project_detail
 from interview_me.backend.agents.resume import get_general_info
 from interview_me.backend.config import settings, tracing_config
 
-
+@lru_cache(maxsize=1)
 def _build_main_agent():
     """Build the supervisor that owns tool selection and answer composition."""
     model = init_chat_model(settings.main_model, model_provider="openrouter")
@@ -34,19 +35,3 @@ def run_main_agent(messages: list[BaseMessage]) -> AIMessage:
         for message in reversed(response["messages"])
         if isinstance(message, AIMessage)
     )
-
-
-async def stream_main_agent(messages: list[BaseMessage]):
-    """Yield supervisor text chunks as they are generated."""
-    stream = _build_main_agent().astream(
-        {"messages": messages},
-        config=tracing_config("interview-main-agent", "main-agent"),
-        stream_mode="messages",
-    )
-    try:
-        async for chunk, _ in stream:
-            if isinstance(chunk, AIMessageChunk) and isinstance(chunk.content, str):
-                if chunk.content:
-                    yield chunk.content
-    finally:
-        await stream.aclose()

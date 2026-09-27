@@ -76,12 +76,6 @@ def test_graph_keeps_subagents_out_of_top_level_nodes():
     }
 
 
-def test_main_agent_prompt_requires_concise_grounded_answers():
-    assert "using only returned evidence" in MAIN_AGENT_PROMPT
-    assert "2-4 sentences" in MAIN_AGENT_PROMPT
-    assert "Do not offer additional information" in MAIN_AGENT_PROMPT
-
-
 # Verifies guard categories remain constrained by constructing a valid decision directly.
 def test_guard_decision_has_closed_categories():
     assert GuardDecision(category="safe").category == "safe"

@@ -18,7 +18,13 @@ def _tokens(text: str) -> list[str]:
 
 
 def _semantic_project_search(query: str, vector_store, candidate_count: int):
-    return vector_store.similarity_search_with_score(query, k=candidate_count)
+    return [
+        (document, score)
+        for document, score in vector_store.similarity_search_with_score(
+            query, k=candidate_count
+        )
+        if score > 0
+    ]
 
 
 def _lexical_project_search(
@@ -50,7 +56,7 @@ def _lexical_project_search(
         key=lambda x: x[1],  # Sort by score
     )
 
-    return [project_ids[index] for index, score in ranked]
+    return [project_ids[index] for index, score in ranked if score > 0]
 
 
 def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_store, k: int = 3):

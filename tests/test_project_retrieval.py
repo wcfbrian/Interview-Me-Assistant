@@ -3,6 +3,8 @@ from rank_bm25 import BM25Okapi
 
 from src.backend.graph.projects import (
     _hybrid_project_search,
+    _lexical_project_search,
+    _semantic_project_search,
     _tokens,
     get_project_detail,
 )
@@ -21,7 +23,13 @@ def test_hybrid_project_search_combines_vector_and_lexical_results(monkeypatch):
             "project_id": "github-2",
             "name": "lexical",
             "summary": "BM25 keyword search",
-            "readme": "lexical",
+            "readme": "BM25 keyword lexical",
+        },
+        {
+            "project_id": "github-3",
+            "name": "unrelated",
+            "summary": "A different project",
+            "readme": "unrelated content",
         },
     ]
 
@@ -49,6 +57,40 @@ def test_hybrid_project_search_combines_vector_and_lexical_results(monkeypatch):
 
     assert [project_id for project_id, _ in matches] == ["github-1", "github-2"]
     assert all(score > 0 for _, score in matches)
+
+
+def test_project_search_returns_empty_for_non_positive_scores(monkeypatch):
+    projects = [
+        {"project_id": "github-1", "name": "alpha", "readme": "first project"},
+        {"project_id": "github-2", "name": "beta", "readme": "second project"},
+    ]
+
+    class FakeVectorStore:
+        def similarity_search_with_score(self, query, k):
+            from langchain_core.documents import Document
+
+            return [
+                (Document(page_content="alpha", metadata={"project_id": "github-1"}), 0.0),
+            ]
+
+    tokenized_corpus = [
+        _tokens(f"{project['name']} {project['readme']}")
+        for project in projects
+    ]
+    monkeypatch.setattr(
+        "src.backend.graph.projects.get_project_bm25",
+        lambda: {
+            "bm25": BM25Okapi(tokenized_corpus),
+            "project_ids": [project["project_id"] for project in projects],
+        },
+    )
+
+    query = "missing technology"
+    vector_store = FakeVectorStore()
+
+    assert _semantic_project_search(query, vector_store, candidate_count=2) == []
+    assert _lexical_project_search(query, projects, candidate_count=2) == []
+    assert _hybrid_project_search(query, projects, vector_store, k=2) == []
 
 
 def test_hybrid_project_search_prioritizes_explicit_project_name(monkeypatch):

@@ -16,3 +16,4 @@ data/*.sqlite*
 .venv/
 data/
 /interview_me/backend/data/*
+.streamlit/

@@ -8,8 +8,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 from interview_me.backend.artifacts import load_profile, load_projects
 from interview_me.backend.decisions import GuardDecision
 from interview_me.backend.ingest import ingest
-from interview_me.backend.ingest_project import ProjectSummary, index_projects
-from interview_me.backend.ingest_resume import CandidateProfile
+from interview_me.backend.ingest.ingest_project import ProjectSummary, index_projects
+from interview_me.backend.ingest.ingest_resume import CandidateProfile
 from interview_me.backend.agents.projects import (
     _hybrid_project_search,
     _tokens,
@@ -173,7 +173,7 @@ def test_index_projects_embeds_summaries_with_project_metadata(monkeypatch, tmp_
 
     vector_store = FakeVectorStore()
     monkeypatch.setattr(
-        "interview_me.backend.ingest_project.reset_project_vector_store",
+        "interview_me.backend.ingest.ingest_project.reset_project_vector_store",
         lambda: vector_store,
     )
 

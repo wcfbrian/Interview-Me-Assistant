@@ -9,7 +9,7 @@ from langchain.tools import tool
 
 from interview_me.backend.artifacts import load_projects
 from interview_me.backend.config import settings, tracing_config
-from interview_me.backend.ingest_project import get_project_bm25, get_project_vector_store
+from interview_me.backend.ingest import get_project_bm25, get_project_vector_store
 
 
 

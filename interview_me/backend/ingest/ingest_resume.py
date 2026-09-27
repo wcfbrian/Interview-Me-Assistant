@@ -6,11 +6,12 @@ from langchain.chat_models import init_chat_model
 from pydantic import BaseModel
 from pypdf import PdfReader
 
-from interview_me.backend.config import settings
+from ..config import settings
 
 
 class CandidateProfile(BaseModel):
     """Facts exposed to the resume subagent."""
+
     name: str
     self_introduction: str
     working_background: str

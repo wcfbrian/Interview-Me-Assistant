@@ -1,6 +1,5 @@
 """Download public, non-fork repository READMEs into the project index."""
 
-import argparse
 import base64
 import json
 import pickle
@@ -17,7 +16,7 @@ from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel, field_validator
 from rank_bm25 import BM25Okapi
 
-from interview_me.backend.config import settings
+from ..config import settings
 
 BM25_INDEX_FILENAME = "projects.bm25.pkl"
 
@@ -152,19 +151,8 @@ def _get_json(url: str, token: str = "") -> object:
 
 
 def pipeline(username: str, output: Path, regenerate_json: bool = False, token: str = "") -> None:
-    """
-    Fetch, summarize, and embed public GitHub repositories for a given user.
-
-    Args:
-        username: GitHub username to fetch repositories for.
-        output: Path to write the summarized project JSON.
-        regenerate_json: Whether to regenerate the summarized project JSON.
-        token: Optional GitHub API token for authentication.
-
-    Returns:
-        None.
-    """
-    if not output.exists() or regenerate_json: 
+    """Fetch, summarize, and embed public GitHub repositories for a given user."""
+    if not output.exists() or regenerate_json:
         print(f"Fetching public repositories for @{username}...")
         repositories = _get_json(f"https://api.github.com/users/{username}/repos", token)
         if not isinstance(repositories, list):
@@ -192,7 +180,6 @@ def pipeline(username: str, output: Path, regenerate_json: bool = False, token: 
         output.write_text(json.dumps(projects, indent=2), encoding="utf-8")
         print(f"Completed: Writing summarized project to {output}...")
 
-    print(f"Starting indexing projects...")
-    # Index the summarized projects
+    print("Starting indexing projects...")
     index_projects(output)
     print(f"Completed: indexed projects to {output}")

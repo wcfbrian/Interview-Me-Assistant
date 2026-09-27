@@ -1,3 +1,4 @@
+import heapq
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -27,35 +28,29 @@ def _lexical_project_search(
     candidate_count: int,
     bm25_index: dict | None = None,
 ):
-    query_tokens = set(_tokens(query))
+    # 1. Validate that the persisted BM25 index matches the current projects.
     if (
         not isinstance(bm25_index, dict)
         or "bm25" not in bm25_index
-        or "tokenized_corpus" not in bm25_index
         or bm25_index["bm25"].corpus_size != len(projects)
     ):
         raise RuntimeError(
             "Persisted BM25 project index is missing; "
             "run project ingestion before searching."
         )
+
+    # 2. Score every project, then retain only the highest-ranked candidates.
     bm25 = bm25_index["bm25"]
-    tokenized_corpus = bm25_index["tokenized_corpus"]
-    lexical_scores = bm25.get_scores(list(query_tokens))
-    lexical_order = sorted(
-        range(len(projects)),
-        key=lambda index: (
-            lexical_scores[index],
-            len(query_tokens.intersection(tokenized_corpus[index])),
-        ),
-        reverse=True,
+    scores = bm25.get_scores(list(set(_tokens(query))))
+    ranked = heapq.nlargest(
+        candidate_count,
+        enumerate(scores),
+        key=lambda x: x[1],  # Sort by score
     )
-    lexical_matches = [
-        index
-        for index in lexical_order
-        if lexical_scores[index] > 0
-        or query_tokens.intersection(tokenized_corpus[index])
-    ]
-    return (lexical_matches or lexical_order)[:candidate_count]
+
+    # 3. Prefer positive BM25 matches; if none exist, preserve the ranked fallback.
+    matches = [index for index, score in ranked if score > 0]
+    return matches or [index for index, score in ranked]
 
 
 def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_store, k: int = 3):

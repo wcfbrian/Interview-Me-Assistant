@@ -78,7 +78,7 @@ def build_resume_agent():
         tools=tools,
         middleware=[
             ToolCallLimitMiddleware(
-            tool_name=tool.__name__,
+            tool_name=tool.name,
             run_limit=1,
             exit_behavior="continue",
         ) for tool in tools

@@ -51,6 +51,36 @@ def test_hybrid_project_search_combines_vector_and_lexical_results(monkeypatch):
     assert all(score > 0 for _, score in matches)
 
 
+def test_hybrid_project_search_prioritizes_explicit_project_name(monkeypatch):
+    projects = [
+        {"project_id": "github-1", "name": "other", "readme": "QA assistant"},
+        {"project_id": "github-2", "name": "QA_bot", "readme": "hybrid retrieval"},
+    ]
+
+    class FakeVectorStore:
+        def similarity_search_with_score(self, query, k):
+            from langchain_core.documents import Document
+
+            return [
+                (Document(page_content="other", metadata={"project_id": "github-1"}), 0.9)
+            ]
+
+    tokenized_corpus = [_tokens(project["readme"]) for project in projects]
+    monkeypatch.setattr(
+        "interview_me.backend.graph.projects.get_project_bm25",
+        lambda: {
+            "bm25": BM25Okapi(tokenized_corpus),
+            "project_ids": [project["project_id"] for project in projects],
+        },
+    )
+
+    matches = _hybrid_project_search(
+        "What did you build in QA_bot?", projects, FakeVectorStore(), k=2
+    )
+
+    assert matches[0][0] == "github-2"
+
+
 # Verifies the public project tool delegates to its subagent by substituting an agent that asserts the invocation payload.
 def test_project_tool_delegates_to_project_subagent(monkeypatch):
     class FakeProjectAgent:

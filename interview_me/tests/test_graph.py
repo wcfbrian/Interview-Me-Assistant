@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from interview_me.backend.graph.decisions import GuardDecision, classify_with_model
 from interview_me.backend.graph import guard_route, build_graph
+from interview_me.backend.graph.main import MAIN_AGENT_PROMPT
 
 
 def _mock_guard(query):
@@ -67,6 +68,12 @@ def test_graph_keeps_subagents_out_of_top_level_nodes():
     }
 
 
+def test_main_agent_prompt_requires_concise_grounded_answers():
+    assert "using only returned evidence" in MAIN_AGENT_PROMPT
+    assert "2-4 sentences" in MAIN_AGENT_PROMPT
+    assert "Do not offer additional information" in MAIN_AGENT_PROMPT
+
+
 # Verifies guard categories remain constrained by constructing a valid decision directly.
 def test_guard_decision_has_closed_categories():
     assert GuardDecision(category="safe").category == "safe"
@@ -90,6 +97,9 @@ def test_type_safe_guard_selects_highest_probability(monkeypatch):
     monkeypatch.setattr("interview_me.backend.graph.decisions.TypeSafeClassifier", FakeClassifier)
     assert classify_with_model("hello") == GuardDecision(category="greeting")
     assert set(captured["request"]["questions"]) == {"category"}
+    criteria = captured["request"]["questions"]["category"].criteria
+    assert "answer may not exist" in criteria["safe"]
+    assert "off-topic" in criteria["prohibited"]
 
 
 # Verifies unavailable guard providers surface a runtime error by replacing model initialization with a failure.

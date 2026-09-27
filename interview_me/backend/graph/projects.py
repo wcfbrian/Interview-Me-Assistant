@@ -88,6 +88,7 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
     fusion_constant = 60
     semantic_weight = 1.0
     lexical_weight = 1.0
+    query_tokens = set(_tokens(query))
 
     for rank, (document, _) in enumerate(vector_matches, start=1):
         project_id = str(document.metadata.get("project_id", ""))
@@ -100,6 +101,11 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
             ranked.setdefault(project_id, {"rrf_score": 0.0})["rrf_score"] += (
                 lexical_weight / (fusion_constant + rank)
             )
+
+    for project_id, project in projects_by_id.items():
+        name_tokens = set(_tokens(project.get("name", "")))
+        if name_tokens and name_tokens <= query_tokens:
+            ranked.setdefault(project_id, {"rrf_score": 0.0})["rrf_score"] += 1.0
 
     return [
         (project_id, values["rrf_score"])

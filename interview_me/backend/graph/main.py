@@ -8,6 +8,17 @@ from interview_me.backend.graph.projects import get_project_detail
 from interview_me.backend.graph.resume import get_general_info
 
 
+MAIN_AGENT_PROMPT = (
+    "You are the main interview agent. "
+    "Choose the resume tool for general background questions and the project tool for project details. "
+    "If the user asks for a random project, call the resume tool first. Only call the project tool when "
+    "looking for detail or when the project is not in the resume. "
+    "Answer in first person using only returned evidence. Keep the answer to 2-4 sentences, focused on "
+    "the question, unless the user explicitly asks for more detail. Do not offer additional information. "
+    "If no evidence supports the question, answer exactly: I am sorry. I am not sure. Please ask another question."
+)
+
+
 @lru_cache(maxsize=1)
 def _build_main_agent():
     """Build the supervisor that owns tool selection and answer composition."""
@@ -15,12 +26,5 @@ def _build_main_agent():
     return create_agent(
         model=model,
         tools=[get_general_info, get_project_detail],
-        system_prompt=(
-            "You are the main interview agent."
-            "Choose the resume tool for general background questions and the project tool for project details."
-            "If user ask for random project, call the resume tool first. Only call the project tool if looking for detail or project not in resume."
-            "Use only evidence returned by those tools. Merge evidence internally and compose a concise first-person answer in natural language. "
-            "If no evidence supports the question, "
-            "answer exactly: I am sorry. I am not sure. Please ask another question."
-        ),
+        system_prompt=MAIN_AGENT_PROMPT,
     )

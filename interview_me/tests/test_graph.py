@@ -1,18 +1,19 @@
 import pytest
+from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from interview_me.backend.decisions import GuardDecision
+from interview_me.backend.graph.decisions import GuardDecision, classify_with_model
 from interview_me.backend.graph import guard_route, build_graph
 
 
 def _mock_guard(query):
     normalized = query.lower()
     if normalized in {"hi", "hello", "hey"}:
-        return GuardDecision(category="greeting", reason="greeting")
+        return GuardDecision(category="greeting")
     if "education" in normalized or "project" in normalized or "name" in normalized:
-        return GuardDecision(category="safe", reason="candidate question")
-    return GuardDecision(category="prohibited", reason="not a candidate question")
+        return GuardDecision(category="safe")
+    return GuardDecision(category="prohibited")
 
 
 # Verifies interview questions reach the main route by replacing model classification with a safe decision.
@@ -27,7 +28,7 @@ def test_guard_passes_conversation_context_for_followup(monkeypatch):
 
     def fake_guard(context):
         captured["context"] = context
-        return GuardDecision(category="safe", reason="follow-up")
+        return GuardDecision(category="safe")
 
     monkeypatch.setattr("interview_me.backend.graph.classify_with_model", fake_guard)
     route = guard_route({
@@ -68,7 +69,27 @@ def test_graph_keeps_subagents_out_of_top_level_nodes():
 
 # Verifies guard categories remain constrained by constructing a valid decision directly.
 def test_guard_decision_has_closed_categories():
-    assert GuardDecision(category="safe", reason="candidate question").category == "safe"
+    assert GuardDecision(category="safe").category == "safe"
+
+
+def test_type_safe_guard_selects_highest_probability(monkeypatch):
+    captured = {}
+
+    class FakeClassifier:
+        def __init__(self, **kwargs):
+            captured["config"] = kwargs
+
+        def invoke(self, request, config=None):
+            captured["request"] = request
+            return SimpleNamespace(
+                answers={
+                    "category": SimpleNamespace(choice="greeting"),
+                }
+            )
+
+    monkeypatch.setattr("interview_me.backend.graph.decisions.TypeSafeClassifier", FakeClassifier)
+    assert classify_with_model("hello") == GuardDecision(category="greeting")
+    assert set(captured["request"]["questions"]) == {"category"}
 
 
 # Verifies unavailable guard providers surface a runtime error by replacing model initialization with a failure.
@@ -76,8 +97,8 @@ def test_unavailable_guard_model_raises(monkeypatch):
     def unavailable(*args, **kwargs):
         raise ConnectionError("provider unavailable")
 
-    monkeypatch.setattr("interview_me.backend.decisions.init_chat_model", unavailable)
+    monkeypatch.setattr("interview_me.backend.graph.decisions.TypeSafeClassifier", unavailable)
     with pytest.raises(RuntimeError, match="Guard model is unavailable"):
-        from interview_me.backend.decisions import classify_with_model
+        from interview_me.backend.graph.decisions import classify_with_model
 
         classify_with_model("Tell me about your experience")

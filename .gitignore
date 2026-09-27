@@ -17,3 +17,6 @@ data/*.sqlite*
 data/
 /interview_me/backend/data/*
 .streamlit/
+.deepeval/
+artifacts/**
+**/datasets/**

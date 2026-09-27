@@ -3,13 +3,12 @@ from functools import lru_cache
 from typing import TypedDict
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain.tools import ToolRuntime, tool
 
 from interview_me.backend.artifacts import load_profile
 from interview_me.backend.config import settings, tracing_config
-
-from langchain.agents.middleware import ToolCallLimitMiddleware
 
 
 class ProfileContext(TypedDict):
@@ -66,22 +65,23 @@ def build_resume_agent():
     """Build the resume subagent with typed profile field tools."""
     model = init_chat_model(settings.main_model, model_provider="openrouter")
     tools = [
-            get_name,
-            get_self_introduction,
-            get_working_background,
-            get_education,
-            get_skills,
-            get_highlighted_project,
-        ]
+        get_name,
+        get_self_introduction,
+        get_working_background,
+        get_education,
+        get_skills,
+        get_highlighted_project,
+    ]
     return create_agent(
         model=model,
         tools=tools,
         middleware=[
             ToolCallLimitMiddleware(
-            tool_name=tool.name,
-            run_limit=1,
-            exit_behavior="continue",
-        ) for tool in tools
+                tool_name=tool.name,
+                run_limit=1,
+                exit_behavior="continue",
+            )
+            for tool in tools
         ],
         context_schema=ProfileContext,
         system_prompt=(

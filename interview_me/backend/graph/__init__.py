@@ -12,9 +12,9 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, Huma
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, MessagesState, StateGraph
 
-from interview_me.backend.agents.main import _build_main_agent
 from interview_me.backend.config import tracing_config
-from interview_me.backend.decisions import classify_with_model
+from interview_me.backend.graph.decisions import classify_with_model
+from interview_me.backend.graph.main import _build_main_agent
 
 GuardRoute = Literal["safe", "greeting", "prohibited"]
 
@@ -35,7 +35,6 @@ def guard_route(state: MessagesState) -> GuardRoute:
     context = _guard_context(state["messages"]).strip()
     category = classify_with_model(context).category
     return category
-    
 
 
 def fixed_greeting(_: MessagesState) -> dict[str, list[BaseMessage]]:

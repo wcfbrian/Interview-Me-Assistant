@@ -1,7 +1,7 @@
 from langchain_core.messages import AIMessage
 from rank_bm25 import BM25Okapi
 
-from interview_me.backend.agents.projects import (
+from interview_me.backend.graph.projects import (
     _hybrid_project_search,
     _tokens,
     get_project_detail,
@@ -38,7 +38,7 @@ def test_hybrid_project_search_combines_vector_and_lexical_results(monkeypatch):
         for project in projects
     ]
     monkeypatch.setattr(
-        "interview_me.backend.agents.projects.get_project_bm25",
+        "interview_me.backend.graph.projects.get_project_bm25",
         lambda: {
             "bm25": BM25Okapi(tokenized_corpus),
             "project_ids": [project["project_id"] for project in projects],
@@ -60,7 +60,7 @@ def test_project_tool_delegates_to_project_subagent(monkeypatch):
             return {"messages": [AIMessage(content='{"status": "found"}')]}
 
     monkeypatch.setattr(
-        "interview_me.backend.agents.projects.build_project_agent",
+        "interview_me.backend.graph.projects.build_project_agent",
         lambda: FakeProjectAgent(),
     )
 

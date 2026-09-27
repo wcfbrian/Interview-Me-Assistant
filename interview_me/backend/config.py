@@ -21,7 +21,10 @@ class Settings:
     langsmith_project: str = os.getenv(
         "LANGSMITH_PROJECT", os.getenv("LANGCHAIN_PROJECT", "interview-me")
     )
-    guard_model: str = os.getenv("GUARD_MODEL", "z-ai/glm-5.3-flash")
+    guard_model: str = os.getenv("GUARD_MODEL", "~typesafe/jev-latest")
+    typesafe_base_url: str = os.getenv(
+        "TYPESAFE_BASE_URL", "https://openrouter.ai/api"
+    )
     evaluation_model: str = os.getenv("EVALUATION_MODEL", "typesafe/jev-1.13")
     github_username: str = os.getenv("GITHUB_USERNAME", "")
     data_dir: Path = Path(os.getenv("DATA_DIR", "interview_me/backend/data"))

@@ -78,11 +78,30 @@ generates `projects.json` from GitHub, embeds project summaries into Chroma, and
 writes all artifacts under `DATA_DIR`. Override the resume and output locations
 with `--input-resume` and `--output-dir`.
 
-To run the evaluation metrics separately:
+To run the local DeepEval quality suite after ingestion:
 
 ```bash
 uv run python -m interview_me.backend.evaluation.run
 ```
+
+The suite uses `EVALUATION_MODEL` through OpenRouter and requires
+`OPENROUTER_API_KEY`. It is intentionally local-only and is not part of the
+normal pytest run. It writes a JSON report to
+`artifacts/evaluations/deepeval-report.json` with route precision, recall, F1,
+answer relevancy, faithfulness, project retrieval contextual precision/recall,
+robustness pass rate, and per-case p50/p95/max end-to-end latency.
+
+The curated cases in `interview_me/backend/evaluation/datasets/interview_cases.json`
+are the source of truth. To generate additional review-only suggestions from the
+approved profile and project artifacts, run:
+
+```bash
+uv run python -m interview_me.backend.evaluation.generate_cases
+```
+
+This writes `artifacts/evaluations/generated-cases.json` without changing the
+curated dataset. Review generated rows before manually promoting them into the
+version-controlled fixture.
 
 The guard uses a structured model call. Unit tests mock this call; live runtime
 uses `OPENROUTER_API_KEY`.

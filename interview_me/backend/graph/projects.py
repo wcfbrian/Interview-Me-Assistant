@@ -13,7 +13,6 @@ from interview_me.backend.config import settings, tracing_config
 from interview_me.backend.ingest import get_project_bm25, get_project_vector_store
 
 
-
 def _tokens(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
 
@@ -27,7 +26,6 @@ def _lexical_project_search(
     projects: list[dict[str, str]],
     candidate_count: int,
 ):
-
     bm25_index = get_project_bm25()
 
     # 1. Validate that the persisted BM25 index matches the current projects.

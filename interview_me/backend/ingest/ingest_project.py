@@ -73,6 +73,7 @@ def _project_embeddings() -> OpenAIEmbeddings:
     )
 
 
+@lru_cache(maxsize=1)
 def get_project_vector_store() -> Chroma:
     return Chroma(
         collection_name="projects",
@@ -84,6 +85,7 @@ def get_project_vector_store() -> Chroma:
 def reset_project_vector_store() -> Chroma:
     """Remove the dedicated project Chroma database and create a fresh one."""
     get_project_bm25.cache_clear()
+    get_project_vector_store.cache_clear()
     if settings.chroma_dir.exists():
         shutil.rmtree(settings.chroma_dir)
     return get_project_vector_store()

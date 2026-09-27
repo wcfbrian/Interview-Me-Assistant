@@ -3,9 +3,9 @@ from functools import lru_cache
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 
-from interview_me.backend.agents.projects import get_project_detail
-from interview_me.backend.agents.resume import get_general_info
 from interview_me.backend.config import settings
+from interview_me.backend.graph.projects import get_project_detail
+from interview_me.backend.graph.resume import get_general_info
 
 
 @lru_cache(maxsize=1)

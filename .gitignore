@@ -21,3 +21,4 @@ data/
 artifacts/**
 **/datasets/**
 .agents/**
+skills-lock.json

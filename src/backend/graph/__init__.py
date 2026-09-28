@@ -17,6 +17,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, Huma
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, MessagesState, StateGraph
 
+from src.backend.artifacts import load_profile
+from src.backend.config import settings
 from src.backend.config import tracing_config
 from src.backend.graph.decisions import classify_with_model
 from src.backend.graph.main import build_main_agent
@@ -30,7 +32,7 @@ CAPTURED_TOOL_NAMES = {
     "get_education",
     "get_skills",
     "get_highlighted_project",
-    "_retrieve_project_evidence",
+    "get_project_detail",
 }
 _tool_responses: ContextVar[list[str] | None] = ContextVar("tool_responses", default=None)
 
@@ -42,7 +44,7 @@ def _tool_response_text(output: Any, tool_name: str) -> list[str]:
             payload = json.loads(content)
         except json.JSONDecodeError:
             return [content]
-        if tool_name == "_retrieve_project_evidence":
+        if tool_name == "get_project_detail":
             evidence = payload.get("evidence", []) if isinstance(payload, dict) else []
             return [
                 item["text"]
@@ -134,6 +136,7 @@ async def main_agent(state: GraphState) -> dict[str, list[BaseMessage] | list[st
     try:
         async for chunk, _ in build_main_agent().astream(
             {"messages": state["messages"]},
+            context=load_profile(settings.profile_path),
             config=config,
             stream_mode="messages",
         ):

@@ -10,7 +10,7 @@ from ..config import settings
 
 
 class CandidateProfile(BaseModel):
-    """Facts exposed to the resume subagent."""
+    """Approved resume facts exposed to the main agent's field tools."""
 
     name: str
     self_introduction: str

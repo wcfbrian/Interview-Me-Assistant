@@ -2,14 +2,11 @@ import heapq
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
 
-from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 from langchain.tools import tool
 
 from src.backend.artifacts import load_projects
-from src.backend.config import settings, tracing_config
+from src.backend.config import settings
 from src.backend.ingest import get_project_bm25, get_project_vector_store
 
 
@@ -123,7 +120,7 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
 
 
 @tool
-def _retrieve_project_evidence(query: str) -> str:
+def get_project_detail(query: str) -> str:
     """Return project evidence from fused semantic and lexical retrieval."""
     projects = load_projects(settings.project_path)
     projects_by_id = {
@@ -140,27 +137,3 @@ def _retrieve_project_evidence(query: str) -> str:
         for project_id, score in matches
     ]
     return json.dumps({"status": "found" if evidence else "not_found", "evidence": evidence})
-
-
-@lru_cache(maxsize=1)
-def build_project_agent():
-    """Build the project subagent that owns semantic project retrieval."""
-    model = init_chat_model(settings.main_model, model_provider="openrouter")
-    return create_agent(
-        model=model,
-        tools=[_retrieve_project_evidence],
-        system_prompt=(
-            "You are the project evidence subagent. Always call the retrieval tool. "
-            "Return related content only. Do not invent, or add facts."
-        ),
-    )
-
-
-@tool
-def get_project_detail(query: str) -> str:
-    """Delegate project questions to the semantic project evidence subagent."""
-    response = build_project_agent().invoke(
-        {"messages": [{"role": "user", "content": query}]},
-        config=tracing_config("interview-project-agent", "project-agent"),
-    )
-    return str(response["messages"][-1].content)

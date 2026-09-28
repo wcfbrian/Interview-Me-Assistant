@@ -67,8 +67,8 @@ def test_fixed_greeting_handles_common_greeting_patterns():
     assert check_in["messages"][0].content == "I am fine. Thank you for asking."
 
 
-# Verifies the compiled graph exposes only top-level workflow nodes by inspecting its node set.
-def test_graph_keeps_subagents_out_of_top_level_nodes():
+# Verifies the compiled graph exposes only request-level workflow nodes by inspecting its node set.
+def test_graph_contains_only_request_level_nodes():
     graph = build_graph()
     assert set(graph.nodes) == {
         "__start__",
@@ -81,7 +81,8 @@ def test_graph_keeps_subagents_out_of_top_level_nodes():
 # Verifies graph state stores only the text emitted by the requested retrieval tool.
 def test_graph_collects_requested_tool_responses(monkeypatch):
     class FakeMainAgent:
-        async def astream(self, payload, config, stream_mode):
+        async def astream(self, payload, context, config, stream_mode):
+            assert context["name"]
             callbacks = config["callbacks"]
             handlers = getattr(callbacks, "handlers", callbacks)
             callback = next(
@@ -111,11 +112,12 @@ def test_graph_collects_requested_tool_responses(monkeypatch):
 
 def test_graph_collects_each_project_evidence_text_separately(monkeypatch):
     class FakeMainAgent:
-        async def astream(self, payload, config, stream_mode):
+        async def astream(self, payload, context, config, stream_mode):
+            assert context["name"]
             callback = config["callbacks"][0]
             run_id = __import__("uuid").uuid4()
             callback.on_tool_start(
-                {"name": "_retrieve_project_evidence"}, "", run_id=run_id
+                {"name": "get_project_detail"}, "", run_id=run_id
             )
             callback.on_tool_end(
                 '{"status": "found", "evidence": ['

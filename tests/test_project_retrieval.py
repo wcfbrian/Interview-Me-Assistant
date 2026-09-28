@@ -1,4 +1,5 @@
-from langchain_core.messages import AIMessage
+import json
+
 from rank_bm25 import BM25Okapi
 
 from src.backend.graph.projects import (
@@ -123,17 +124,29 @@ def test_hybrid_project_search_prioritizes_explicit_project_name(monkeypatch):
     assert matches[0][0] == "github-2"
 
 
-# Verifies the public project tool delegates to its subagent by substituting an agent that asserts the invocation payload.
-def test_project_tool_delegates_to_project_subagent(monkeypatch):
-    class FakeProjectAgent:
-        def invoke(self, payload, **kwargs):
-            assert payload["messages"][0]["content"] == "Tell me about RAG"
-            assert kwargs["config"]["run_name"] == "interview-project-agent"
-            return {"messages": [AIMessage(content='{"status": "found"}')]}
-
+def test_project_tool_returns_retrieved_evidence_directly(monkeypatch):
+    projects = [
+        {
+            "project_id": "github-1",
+            "name": "RAG",
+            "summary": "Grounded retrieval",
+            "readme": "Hybrid project retrieval",
+        }
+    ]
+    monkeypatch.setattr("src.backend.graph.projects.load_projects", lambda _: projects)
+    monkeypatch.setattr("src.backend.graph.projects.get_project_vector_store", lambda: object())
     monkeypatch.setattr(
-        "src.backend.graph.projects.build_project_agent",
-        lambda: FakeProjectAgent(),
+        "src.backend.graph.projects._hybrid_project_search",
+        lambda query, loaded_projects, vector_store: [("github-1", 1.0)],
     )
 
-    assert get_project_detail.invoke({"query": "Tell me about RAG"}) == '{"status": "found"}'
+    result = json.loads(get_project_detail.invoke({"query": "Tell me about RAG"}))
+
+    assert result["status"] == "found"
+    assert result["evidence"] == [
+        {
+            "source": "project:RAG",
+            "text": "Hybrid project retrieval",
+            "score": 1.0,
+        }
+    ]

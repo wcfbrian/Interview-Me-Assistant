@@ -181,9 +181,12 @@ the remaining failures use retrieval metrics that do not fit no-evidence
 refusal cases. Future baselines should report retrieval cases and refusal cases
 separately.
 
-### Next priorities
+### Future work
 
-1. Score refusal cases with safety and answer-correctness metrics instead of
-   retrieval-context metrics.
-2. Keep regression coverage for the project retrieval cases that now pass.
-3. Trace slow routes and model calls to reduce p95 latency further.
+1. Add model latency, token usage, estimated cost, and retrieval diagnostics to
+   LangSmith traces and an optional local debug view.
+2. Harden deployment with authentication, rate limiting, request timeouts, and
+   user-friendly recovery when model or retrieval providers are unavailable.
+3. Expand evaluation with dedicated refusal and safety metrics, multi-turn and
+   guard-route cases, format compliance, multilingual prompts, and separate
+   retrieval and refusal baselines.

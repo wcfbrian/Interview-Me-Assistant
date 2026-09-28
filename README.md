@@ -3,62 +3,41 @@
 A LangGraph interview assistant that answers in the candidate's voice using only
 approved resume and project evidence.
 
-## Architecture
-
-The top-level graph keeps `MessagesState` as its only state:
-
-```text
-START -> guard conditional edge
-		 | greeting -> fixed greeting -> END
-		 | irrelevant -> fixed relevance response -> END
-		 | relevant -> main_agent
-					-> END
-```
-
-`resume_subagent` and `project_subagent` are tools of `main_agent`. They are not
-LangGraph nodes. The main agent calls them, merges their returned evidence, and
-composes the final answer internally.
-
-The repository is organized by runtime responsibility:
-
-```text
-src/
-├── backend/         # graph, agents, ingestion, and evaluation
-└── frontend/        # Streamlit presentation layer
-src/backend/data/ # local profile, resume, and project artifacts
-tests/            # unit and graph contract tests
-```
-
 ## Setup
 
-Requires Python 3.11 or newer.
+Prerequisites:
+
+- Python 3.11 or newer
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- An OpenRouter API key
 
 ```bash
 cp .env.example .env
 uv sync
-uv run pytest -q
 ```
 
 `uv sync` creates the local virtual environment and installs the locked runtime
 and development dependencies from `uv.lock`.
 
-Set `OPENROUTER_API_KEY` in `.env` before running a live model request. Keep
-`.env` local and never commit it.
+Set at least these values in `.env` before making live model requests:
+
+```dotenv
+OPENROUTER_API_KEY=your-api-key
+```
+
+The defaults in `.env.example` configure the runtime, guard, embedding, and
+evaluation models. Keep `.env` local and never commit it.
 
 To trace supervisor, subagent, tool, and model runs in LangSmith, set
 `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT` in `.env`.
 
 The graph entry point is `src.backend.graph:graph`.
 
-## Run the agent
 
-Configure `.env` with `OPENROUTER_API_KEY`, `GITHUB_USERNAME`, and the path to
-your resume PDF if it is not at `src/backend/data/resume.pdf`. Then
-build the approved profile, project summaries, and Chroma semantic index:
 
-```bash
-uv run python -m src.backend.ingest --regenerate-json
-```
+## Run the Agent
+
+Configure `.env` with `OPENROUTER_API_KEY`, `GITHUB_USERNAME`
 
 Start the Streamlit application:
 
@@ -66,27 +45,86 @@ Start the Streamlit application:
 uv run streamlit run src/frontend/app.py
 ```
 
-Open the local URL printed by Chainlit, then ask questions about the candidate's
-background or projects. On later runs, use `uv run python -m
-src.backend.ingest` to reuse existing JSON artifacts while refreshing
-the Chroma index; pass `--regenerate-json` whenever the resume or GitHub project
-data has changed.
-
-The ingest command extracts text from `RESUME_PATH`, uses the configured model to
-populate the closed candidate profile schema, and writes `profile.json`. It also
-generates `projects.json` from GitHub, embeds project summaries into Chroma, and
-writes all artifacts under `DATA_DIR`. Override the resume and output locations
-with `--input-resume` and `--output-dir`.
-
 For Docker:
 
 ```bash
 docker compose up --build
 ```
 
-## Current scope
+## Ingest Data (Optional)
 
-The graph, grounded artifact tools, hybrid project retrieval, ingestion commands,
-Streamlit adapter, Docker packaging, structured model decisions, and evaluation
-baseline are implemented. DeepEval/JEV integration remains the next
-accuracy-focused layer.
+Run the following command to extract text from the resume, populate the candidate profile, generate project summaries from GitHub, embed them into Chroma, and write all artifacts under the data directory:
+
+```bash
+uv run python -m src.backend.ingest --regenerate-json
+```
+
+## Run the Tests
+
+Run the complete pytest suite from the repository root:
+
+```bash
+uv run pytest
+```
+
+Use `-q` for concise output or target a specific file or test while developing:
+
+```bash
+uv run pytest -q
+uv run pytest tests/test_graph.py
+uv run pytest tests/test_graph.py::test_guard_routes_greeting_to_fixed_response
+```
+
+These tests cover graph routing, artifact cleanup, ingestion, project indexing,
+and hybrid project retrieval. The DeepEval workflow below is separate and makes
+live model requests.
+
+## Run the Evaluation
+
+The DeepEval suite runs 27 golden interview cases against the graph, then scores
+the answers for hallucination, answer relevancy, faithfulness, contextual
+precision, and contextual recall. To pass the evaluation, all metrics must meet the required thresholds (>0.5).
+
+```bash
+uv run eval/eval_agent.py
+```
+
+### Recorded baseline
+
+Run on 2026-09-28 with 27 test cases:
+
+```text
+Test Results (27 total tests):
+	Pass Rate: 74.07% | Passed: 20 | Failed: 7
+
+Latency: p50=11.691s, p95=69.168s
+```
+
+The full per-case report is available at
+[`eval/eval_reports/evaluation_20260928_082553.md`](eval/eval_reports/evaluation_20260928_082553.md).
+
+### Result interpretation
+
+- **Grounding is strong:** hallucination and faithfulness both scored 1.00 with
+  a 100% metric pass rate. Answer relevancy averaged 0.95 and passed 26 of 27
+  cases.
+- **Contextual precision determines the overall result:** all seven failed test
+  cases fell below the 0.50 contextual-precision threshold. Four otherwise
+  relevant and faithful project answers (`lstm-forecasting-target`,
+  `video-slide-report`, `java-server-unsupported-benchmark`, and
+  `healthcare-vague-intent`) indicate that retrieval ranking or excess context
+  needs improvement.
+- **Three failures are evaluation artifacts:** `drought-unknown-accuracy`,
+  `fabricated-award`, and `qabot-prompt-injection` returned the exact expected
+  refusal and did not hallucinate, but contextual precision and recall scored
+  zero. Refusal cases should be evaluated with safety and answer-correctness
+  metrics instead of requiring supporting retrieval context.
+- **Tail latency is high:** p95 latency was 69.168 seconds versus an 11.691-second
+  median, so a small number of graph calls dominate response time. Tracing those
+  cases by route, retrieval count, and model duration is the next performance
+  priority.
+
+The 74.07% test pass rate therefore understates behavioral correctness: it mixes
+genuine retrieval-quality weaknesses with metrics that do not fit no-evidence
+refusal cases. Future baselines should report retrieval cases and refusal cases
+separately.

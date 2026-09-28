@@ -6,17 +6,83 @@ tools used by ``main_agent`` and are intentionally not graph nodes.
 
 from __future__ import annotations
 
-from typing import Literal
+from contextvars import ContextVar
+import json
+import operator
+from typing import Annotated, Any, Literal, TypedDict
+from uuid import UUID
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, MessagesState, StateGraph
 
 from src.backend.config import tracing_config
 from src.backend.graph.decisions import classify_with_model
-from src.backend.graph.main import _build_main_agent
+from src.backend.graph.main import build_main_agent
 
 GuardRoute = Literal["safe", "greeting", "prohibited"]
+
+CAPTURED_TOOL_NAMES = {
+    "get_name",
+    "get_self_introduction",
+    "get_working_background",
+    "get_education",
+    "get_skills",
+    "get_highlighted_project",
+    "_retrieve_project_evidence",
+}
+_tool_responses: ContextVar[list[str] | None] = ContextVar("tool_responses", default=None)
+
+
+def _tool_response_text(output: Any, tool_name: str) -> list[str]:
+    content = getattr(output, "content", output)
+    if isinstance(content, str):
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError:
+            return [content]
+        if tool_name == "_retrieve_project_evidence":
+            evidence = payload.get("evidence", []) if isinstance(payload, dict) else []
+            return [
+                item["text"]
+                for item in evidence
+                if isinstance(item, dict) and isinstance(item.get("text"), str)
+            ]
+        if isinstance(payload, dict) and isinstance(payload.get("text"), str):
+            return [payload["text"]]
+    return [str(content)]
+
+
+class GraphState(MessagesState):
+    """Conversation state plus evidence returned by approved retrieval tools."""
+
+    context: Annotated[list[str], operator.add]
+
+
+class _ToolResponseCollector(BaseCallbackHandler):
+    """Collect outputs only from tools whose results form interview evidence."""
+
+    def __init__(self) -> None:
+        self._tool_names: dict[UUID, str] = {}
+
+    def on_tool_start(
+        self,
+        serialized: dict[str, Any],
+        _: str,
+        *,
+        run_id: UUID,
+        **__: Any,
+    ) -> None:
+        tool_name = serialized.get("name")
+        if tool_name in CAPTURED_TOOL_NAMES:
+            self._tool_names[run_id] = tool_name
+
+    def on_tool_end(self, output: Any, *, run_id: UUID, **__: Any) -> None:
+        responses = _tool_responses.get()
+        tool_name = self._tool_names.get(run_id)
+        if tool_name is not None and responses is not None:
+            responses.extend(_tool_response_text(output, tool_name))
 
 
 def _guard_context(messages: list[BaseMessage]) -> str:
@@ -30,14 +96,14 @@ def _guard_context(messages: list[BaseMessage]) -> str:
     return "\n".join(turns)
 
 
-def guard_route(state: MessagesState) -> GuardRoute:
+def guard_route(state: GraphState) -> GuardRoute:
     """Route the request using the mandatory structured guard model."""
     context = _guard_context(state["messages"]).strip()
     category = classify_with_model(context).category
     return category
 
 
-def fixed_greeting(state: MessagesState) -> dict[str, list[BaseMessage]]:
+def fixed_greeting(state: GraphState) -> dict[str, list[BaseMessage]]:
     """Return a concise response for common greeting patterns."""
     latest_message = state["messages"][-1] if state["messages"] else None
 
@@ -51,32 +117,43 @@ def fixed_greeting(state: MessagesState) -> dict[str, list[BaseMessage]]:
     return {"messages": [AIMessage(content=response)]}
 
 
-def fixed_relevance_response(_: MessagesState) -> dict[str, list[BaseMessage]]:
+def fixed_relevance_response(_: GraphState) -> dict[str, list[BaseMessage]]:
     return {"messages": [AIMessage(content="I am sorry. I am not sure. Please ask another question.")]}
 
 
-async def main_agent(state: MessagesState) -> dict[str, list[BaseMessage]]:
+async def main_agent(state: GraphState) -> dict[str, list[BaseMessage] | list[str]]:
     """Stream the supervisor's final answer while preserving the graph message state."""
     writer = get_stream_writer()
     answer_parts: list[str] = []
+    tool_responses: list[str] = []
+    context_token = _tool_responses.set(tool_responses)
+    collector = _ToolResponseCollector()
+    config = tracing_config("interview-main-agent", "main-agent")
+    config["callbacks"] = [collector]
 
-    async for chunk, _ in _build_main_agent().astream(
-        {"messages": state["messages"]},
-        config=tracing_config("interview-main-agent", "main-agent"),
-        stream_mode="messages",
-    ):
-        if not isinstance(chunk, AIMessageChunk) or not isinstance(chunk.content, str):
-            continue
-        if chunk.content:
-            answer_parts.append(chunk.content)
-            writer(chunk.content)
+    try:
+        async for chunk, _ in build_main_agent().astream(
+            {"messages": state["messages"]},
+            config=config,
+            stream_mode="messages",
+        ):
+            if not isinstance(chunk, AIMessageChunk) or not isinstance(chunk.content, str):
+                continue
+            if chunk.content:
+                answer_parts.append(chunk.content)
+                writer(chunk.content)
+    finally:
+        _tool_responses.reset(context_token)
 
-    return {"messages": [AIMessage(content="".join(answer_parts))]}
+    return {
+        "messages": [AIMessage(content="".join(answer_parts))],
+        "context": tool_responses,
+    }
 
 
 def build_graph():
-    """Compile the request-level graph with messages as its only state."""
-    builder = StateGraph(MessagesState)
+    """Compile the request-level graph with conversation and evidence state."""
+    builder = StateGraph(GraphState)
     builder.add_node("main_agent", main_agent)
     builder.add_node("fixed_greeting", fixed_greeting)
     builder.add_node("fixed_relevance_response", fixed_relevance_response)

@@ -22,3 +22,6 @@ artifacts/**
 **/datasets/**
 .agents/**
 skills-lock.json
+eval/eval_reports/**
+eval/eval_result/**
+eval/*.jsonl

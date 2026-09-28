@@ -1,10 +1,12 @@
+import asyncio
+
 import pytest
 from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from src.backend.graph.decisions import GuardDecision, classify_with_model
-from src.backend.graph import build_graph, fixed_greeting, guard_route
+from src.backend.graph import GraphState, build_graph, fixed_greeting, guard_route
 from src.backend.graph.main import MAIN_AGENT_PROMPT
 
 
@@ -74,6 +76,66 @@ def test_graph_keeps_subagents_out_of_top_level_nodes():
         "fixed_greeting",
         "fixed_relevance_response",
     }
+
+
+# Verifies graph state stores only the text emitted by the requested retrieval tool.
+def test_graph_collects_requested_tool_responses(monkeypatch):
+    class FakeMainAgent:
+        async def astream(self, payload, config, stream_mode):
+            callbacks = config["callbacks"]
+            handlers = getattr(callbacks, "handlers", callbacks)
+            callback = next(
+                handler
+                for handler in handlers
+                if handler.__class__.__name__ == "_ToolResponseCollector"
+            )
+            run_id = __import__("uuid").uuid4()
+            callback.on_tool_start(
+                {"name": "get_skills"}, "", run_id=run_id
+            )
+            callback.on_tool_end(
+                '{"source": "resume:skills", "text": "Python, LangChain"}',
+                run_id=run_id,
+            )
+            yield AIMessage(content="I use Python."), {}
+
+    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr("src.backend.graph.build_main_agent", lambda: FakeMainAgent())
+
+    result = asyncio.run(
+        build_graph().ainvoke({"messages": [HumanMessage(content="What is your name?")]})
+    )
+
+    assert result["context"] == ["Python, LangChain"]
+
+
+def test_graph_collects_each_project_evidence_text_separately(monkeypatch):
+    class FakeMainAgent:
+        async def astream(self, payload, config, stream_mode):
+            callback = config["callbacks"][0]
+            run_id = __import__("uuid").uuid4()
+            callback.on_tool_start(
+                {"name": "_retrieve_project_evidence"}, "", run_id=run_id
+            )
+            callback.on_tool_end(
+                '{"status": "found", "evidence": ['
+                '{"source": "project:One", "text": "First project"}, '
+                '{"source": "project:Two", "text": "Second project"}'
+                "]}",
+                run_id=run_id,
+            )
+            yield AIMessage(content="I found two projects."), {}
+
+    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr("src.backend.graph.build_main_agent", lambda: FakeMainAgent())
+
+    result = asyncio.run(
+        build_graph().ainvoke(
+            {"messages": [HumanMessage(content="Tell me about projects")]}
+        )
+    )
+
+    assert result["context"] == ["First project", "Second project"]
 
 
 # Verifies guard categories remain constrained by constructing a valid decision directly.

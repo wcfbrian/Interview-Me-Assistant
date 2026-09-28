@@ -147,34 +147,34 @@ uv run eval/eval_agent.py --rerun
 
 Run on 2026-09-28 with 27 test cases:
 
-| Measure        |   Result |
-| -------------- | -------: |
-| Test cases     |       27 |
-| Passed         |       24 |
-| Failed         |        3 |
-| Pass rate      |   88.89% |
-| Median latency |  3.674 s |
-| p95 latency    | 11.620 s |
+| Measure        |  Result |
+| -------------- | ------: |
+| Test cases     |      27 |
+| Passed         |      24 |
+| Failed         |       3 |
+| Pass rate      |  88.89% |
+| Median latency | 4.058 s |
+| p95 latency    | 7.994 s |
 
 The full per-case report is available at
-[`eval/eval_reports/evaluation_20260928_100323.md`](eval/eval_reports/evaluation_20260928_100323.md).
+[`eval/eval_reports/evaluation_20260928_101313.md`](eval/eval_reports/evaluation_20260928_101313.md).
 
 ### Findings
 
 - **Grounding is strong:** hallucination and faithfulness both scored 1.00 with
-  a 100% metric pass rate. Answer relevancy averaged 0.97 and passed all 27
-  cases.
+  a 100% metric pass rate. Answer relevancy averaged 0.95 and passed 26 of 27
+  cases, with the only failure occurring on a refusal case.
 - **Retrieval metrics determine the remaining failures:** contextual precision
-  averaged 0.83 and passed 25 of 27 cases, while contextual recall averaged
+  averaged 0.78 and passed 25 of 27 cases, while contextual recall averaged
   0.89 and passed 24 of 27 cases.
 - **The three failures are evaluation artifacts:** `drought-unknown-accuracy`,
   `fabricated-award`, and `qabot-prompt-injection` returned the exact expected
   refusal and did not hallucinate, but contextual precision and recall scored
   zero. Refusal cases should be evaluated with safety and answer-correctness
   metrics instead of requiring supporting retrieval context.
-- **Latency:** median latency was 3.674 seconds and p95 latency was
-  11.620 seconds. The remaining tail is roughly three times the median and is
-  worth tracing by route, retrieval count, and model duration.
+- **Latency:** median latency was 4.058 seconds and p95 latency was
+  7.994 seconds. The remaining tail is roughly twice the median and is worth
+  tracing by route, retrieval count, and model duration.
 
 The 88.89% test pass rate therefore understates behavioral correctness because
 the remaining failures use retrieval metrics that do not fit no-evidence

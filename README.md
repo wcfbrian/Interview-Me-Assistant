@@ -135,6 +135,14 @@ requests and may incur provider costs.
 uv run eval/eval_agent.py
 ```
 
+By default, the evaluator reuses `eval/interview_agent_test_cases.jsonl` when
+the cache is present and valid. Regenerate the agent responses and overwrite
+that cache with:
+
+```bash
+uv run eval/eval_agent.py --rerun
+```
+
 ### Recorded baseline
 
 Run on 2026-09-28 with 27 test cases:
@@ -142,45 +150,40 @@ Run on 2026-09-28 with 27 test cases:
 | Measure        |   Result |
 | -------------- | -------: |
 | Test cases     |       27 |
-| Passed         |       20 |
-| Failed         |        7 |
-| Pass rate      |   74.07% |
-| Median latency | 11.691 s |
-| p95 latency    | 69.168 s |
+| Passed         |       24 |
+| Failed         |        3 |
+| Pass rate      |   88.89% |
+| Median latency |  3.674 s |
+| p95 latency    | 11.620 s |
 
 The full per-case report is available at
-[`eval/eval_reports/evaluation_20260928_082553.md`](eval/eval_reports/evaluation_20260928_082553.md).
+[`eval/eval_reports/evaluation_20260928_100323.md`](eval/eval_reports/evaluation_20260928_100323.md).
 
 ### Findings
 
 - **Grounding is strong:** hallucination and faithfulness both scored 1.00 with
-  a 100% metric pass rate. Answer relevancy averaged 0.95 and passed 26 of 27
+  a 100% metric pass rate. Answer relevancy averaged 0.97 and passed all 27
   cases.
-- **Contextual precision determines the overall result:** all seven failed test
-  cases fell below the 0.50 contextual-precision threshold. Four otherwise
-  relevant and faithful project answers (`lstm-forecasting-target`,
-  `video-slide-report`, `java-server-unsupported-benchmark`, and
-  `healthcare-vague-intent`) indicate that retrieval ranking or excess context
-  needs improvement.
-- **Three failures are evaluation artifacts:** `drought-unknown-accuracy`,
+- **Retrieval metrics determine the remaining failures:** contextual precision
+  averaged 0.83 and passed 25 of 27 cases, while contextual recall averaged
+  0.89 and passed 24 of 27 cases.
+- **The three failures are evaluation artifacts:** `drought-unknown-accuracy`,
   `fabricated-award`, and `qabot-prompt-injection` returned the exact expected
   refusal and did not hallucinate, but contextual precision and recall scored
   zero. Refusal cases should be evaluated with safety and answer-correctness
   metrics instead of requiring supporting retrieval context.
-- **Tail latency is high:** p95 latency was 69.168 seconds versus an 11.691-second
-  median, so a small number of graph calls dominate response time. Tracing those
-  cases by route, retrieval count, and model duration is the next performance
-  priority.
+- **Latency:** median latency was 3.674 seconds and p95 latency was
+  11.620 seconds. The remaining tail is roughly three times the median and is
+  worth tracing by route, retrieval count, and model duration.
 
-The 74.07% test pass rate therefore understates behavioral correctness: it mixes
-genuine retrieval-quality weaknesses with metrics that do not fit no-evidence
+The 88.89% test pass rate therefore understates behavioral correctness because
+the remaining failures use retrieval metrics that do not fit no-evidence
 refusal cases. Future baselines should report retrieval cases and refusal cases
 separately.
 
 ### Next priorities
 
-1. Improve project ranking and reduce excess context for the four genuine
-   contextual-precision failures.
-2. Score refusal cases with safety and answer-correctness metrics instead of
+1. Score refusal cases with safety and answer-correctness metrics instead of
    retrieval-context metrics.
-3. Trace slow routes and model calls to reduce p95 latency.
+2. Keep regression coverage for the project retrieval cases that now pass.
+3. Trace slow routes and model calls to reduce p95 latency further.

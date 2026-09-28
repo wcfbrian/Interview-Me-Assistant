@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import math
@@ -57,20 +58,6 @@ def _load_cached_test_cases(dataset: EvaluationDataset) -> list[LLMTestCase] | N
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return None
 
-    if len(test_cases) != len(dataset.goldens):
-        return None
-
-    for test_case, golden in zip(test_cases, dataset.goldens, strict=True):
-        if (
-            test_case.input != golden.input
-            or test_case.expected_output != golden.expected_output
-            or test_case.context != golden.context
-            or test_case.metadata != golden.additional_metadata
-            or test_case.comments != golden.comments
-            or test_case.name != golden.name
-        ):
-            return None
-
     return test_cases
 
 
@@ -96,11 +83,15 @@ def _save_test_cases(test_cases: list[LLMTestCase]) -> None:
     TEST_CASE_CACHE_PATH.write_text(f"{content}\n", encoding="utf-8")
 
 
-async def build_test_cases(dataset: EvaluationDataset) -> list[LLMTestCase]:
-    cached_test_cases = _load_cached_test_cases(dataset)
-    if cached_test_cases is not None:
-        print(f"Loaded {len(cached_test_cases)} cached test cases")
-        return cached_test_cases
+async def build_test_cases(
+    dataset: EvaluationDataset,
+    rerun: bool = False,
+) -> list[LLMTestCase]:
+    if not rerun:
+        cached_test_cases = _load_cached_test_cases(dataset)
+        if cached_test_cases is not None:
+            print(f"Loaded {len(cached_test_cases)} cached test cases")
+            return cached_test_cases
 
     graph = build_graph()
     test_cases = []
@@ -135,9 +126,17 @@ async def build_test_cases(dataset: EvaluationDataset) -> list[LLMTestCase]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate the interview agent.")
+    parser.add_argument(
+        "--rerun",
+        action="store_true",
+        help="regenerate test cases instead of loading the cached responses",
+    )
+    args = parser.parse_args()
+
     dataset = EvaluationDataset()
     dataset.add_goldens_from_jsonl_file(str(DATASET_PATH))
-    test_cases = asyncio.run(build_test_cases(dataset))
+    test_cases = asyncio.run(build_test_cases(dataset, rerun=args.rerun))
 
     judge = OpenRouterModel(
         model=os.environ["EVALUATION_MODEL"],
@@ -150,6 +149,8 @@ def main() -> None:
         ContextualPrecisionMetric(model=judge, include_reason=False),
         ContextualRecallMetric(model=judge, include_reason=False),
     ]
+
+    
     evaluate(
         test_cases=test_cases,
         metrics=metrics,

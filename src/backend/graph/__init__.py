@@ -119,7 +119,7 @@ def fixed_greeting(state: GraphState) -> dict[str, list[BaseMessage]]:
     return {"messages": [AIMessage(content=response)]}
 
 
-def fixed_relevance_response(_: GraphState) -> dict[str, list[BaseMessage]]:
+def refusal_to_answer(_: GraphState) -> dict[str, list[BaseMessage]]:
     return {"messages": [AIMessage(content="I am sorry. I am not sure. Please ask another question.")]}
 
 
@@ -159,19 +159,19 @@ def build_graph():
     builder = StateGraph(GraphState)
     builder.add_node("main_agent", main_agent)
     builder.add_node("fixed_greeting", fixed_greeting)
-    builder.add_node("fixed_relevance_response", fixed_relevance_response)
+    builder.add_node("refusal_to_answer", refusal_to_answer)
     builder.add_conditional_edges(
         START,
         guard_route,
         {
             "safe": "main_agent",
             "greeting": "fixed_greeting",
-            "prohibited": "fixed_relevance_response",
+            "prohibited": "refusal_to_answer",
         },
     )
     builder.add_edge("main_agent", END)
     builder.add_edge("fixed_greeting", END)
-    builder.add_edge("fixed_relevance_response", END)
+    builder.add_edge("refusal_to_answer", END)
     return builder.compile()
 
 

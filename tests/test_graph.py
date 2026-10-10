@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from langchain_core.messages import AIMessage, HumanMessage
 
 from src.backend.graph.decisions import GuardDecision, classify_with_model
-from src.backend.graph import GraphState, build_graph, fixed_greeting, guard_route
+from src.backend.graph import GraphState, build_graph, greeting, guard_route
 from src.backend.graph.main import MAIN_AGENT_PROMPT
 
 
@@ -59,11 +59,11 @@ def test_guard_routes_greeting_to_fixed_response(monkeypatch):
     assert guard_route({"messages": [HumanMessage(content="hello")]}) == "greeting"
 
 
-def test_fixed_greeting_handles_common_greeting_patterns():
-    greeting = fixed_greeting({"messages": [HumanMessage(content="Good morning!")]})
-    check_in = fixed_greeting({"messages": [HumanMessage(content="How are you?")]})
+def test_greeting_handles_common_greeting_patterns():
+    salutation = greeting({"messages": [HumanMessage(content="Good morning!")]})
+    check_in = greeting({"messages": [HumanMessage(content="How are you?")]})
 
-    assert greeting["messages"][0].content == "Hello. Welcome to interview me."
+    assert salutation["messages"][0].content == "Hello. Welcome to interview me."
     assert check_in["messages"][0].content == "I am fine. Thank you for asking."
 
 
@@ -73,9 +73,23 @@ def test_graph_contains_only_request_level_nodes():
     assert set(graph.nodes) == {
         "__start__",
         "main_agent",
-        "fixed_greeting",
-        "fixed_relevance_response",
+        "greeting",
+        "refusal_to_answer",
     }
+
+
+def test_graph_invokes_greeting_node(monkeypatch):
+    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+
+    def unexpected_main_agent():
+        pytest.fail("Greetings must bypass the main agent")
+
+    monkeypatch.setattr("src.backend.graph.build_main_agent", unexpected_main_agent)
+    result = asyncio.run(
+        build_graph().ainvoke({"messages": [HumanMessage(content="hello")]})
+    )
+
+    assert result["messages"][-1].content == "Hello. Welcome to interview me."
 
 
 # Verifies graph state stores only the text emitted by the requested retrieval tool.

@@ -105,7 +105,7 @@ def guard_route(state: GraphState) -> GuardRoute:
     return category
 
 
-def fixed_greeting(state: GraphState) -> dict[str, list[BaseMessage]]:
+def greeting(state: GraphState) -> dict[str, list[BaseMessage]]:
     """Return a concise response for common greeting patterns."""
     latest_message = state["messages"][-1] if state["messages"] else None
 
@@ -158,19 +158,19 @@ def build_graph():
     """Compile the request-level graph with conversation and evidence state."""
     builder = StateGraph(GraphState)
     builder.add_node("main_agent", main_agent)
-    builder.add_node("fixed_greeting", fixed_greeting)
+    builder.add_node("greeting", greeting)
     builder.add_node("refusal_to_answer", refusal_to_answer)
     builder.add_conditional_edges(
         START,
         guard_route,
         {
             "safe": "main_agent",
-            "greeting": "fixed_greeting",
+            "greeting": "greeting",
             "prohibited": "refusal_to_answer",
         },
     )
     builder.add_edge("main_agent", END)
-    builder.add_edge("fixed_greeting", END)
+    builder.add_edge("greeting", END)
     builder.add_edge("refusal_to_answer", END)
     return builder.compile()
 

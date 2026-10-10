@@ -64,10 +64,10 @@ that selects one node based on the conversation.
 flowchart TD
   Start([START]) --> Guard{guard_route}
   Guard -->|safe| Main[main_agent]
-  Guard -->|greeting| Greeting[fixed_greeting]
-  Guard -->|prohibited| Refusal[fixed_relevance_response]
-  Main -.->|query| Resume[Resume field tools]
-  Main -.->|query| Project[  RAG subagent \n get_project_detail]
+  Guard -->|greeting| Greeting[greeting]
+  Guard -->|prohibited| Refusal[refusal_to_answer]
+  Main -.->|field lookup| Resume[Resume field tools]
+  Main -.->|project query| Project[  RAG subagent \n get_project_detail]
   Resume -.->|profile evidence| Main
   Project -.->|ranked project evidence| Main
   Main --> End([END])
@@ -84,8 +84,8 @@ within `main_agent`; the tools are not additional graph nodes.
 | `main_agent`               | LangGraph node     | Routes questions to the appropriate tool and streams a grounded first-person answer. |
 | Resume field tools         | Tool               | Return approved profile evidence for general interview questions.                    |
 | `get_project_detail`       | Tool               | Runs hybrid Chroma and BM25 search and returns ranked project evidence.              |
-| `fixed_greeting`           | LangGraph node     | Returns a deterministic greeting without invoking the main agent.                    |
-| `fixed_relevance_response` | LangGraph node     | Returns a deterministic response for prohibited requests.                            |
+| `greeting`                 | LangGraph node     | Returns a deterministic greeting without invoking the main agent.                    |
+| `refusal_to_answer` | LangGraph node     | Returns a deterministic response when the guard rejects a request.                   |
 
 ## Ingest Data (Optional)
 

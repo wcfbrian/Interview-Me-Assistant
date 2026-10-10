@@ -1,4 +1,5 @@
 import asyncio
+from importlib import import_module
 
 import pytest
 from types import SimpleNamespace
@@ -7,7 +8,9 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from src.backend.graph.decisions import GuardDecision, classify_with_model
 from src.backend.graph import GraphState, build_graph, greeting, guard_route
-from src.backend.graph.main import MAIN_AGENT_PROMPT
+from src.backend.graph.main_agent import MAIN_AGENT_PROMPT
+
+graph_module = import_module("src.backend.graph.graph")
 
 
 def _mock_guard(query):
@@ -21,7 +24,7 @@ def _mock_guard(query):
 
 # Verifies interview questions reach the main route by replacing model classification with a safe decision.
 def test_guard_routes_interview_question_to_main_agent(monkeypatch):
-    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="Tell me about your projects")]}) == "safe"
 
 
@@ -33,7 +36,7 @@ def test_guard_passes_conversation_context_for_followup(monkeypatch):
         captured["context"] = context
         return GuardDecision(category="safe")
 
-    monkeypatch.setattr("src.backend.graph.classify_with_model", fake_guard)
+    monkeypatch.setattr(graph_module, "classify_with_model", fake_guard)
     route = guard_route({
         "messages": [
             HumanMessage(content="Tell me about your projects"),
@@ -49,13 +52,13 @@ def test_guard_passes_conversation_context_for_followup(monkeypatch):
 
 # Verifies candidate-name questions are allowed by evaluating the deterministic safe guard substitute.
 def test_guard_allows_candidate_name_question(monkeypatch):
-    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="What is your name?")]}) == "safe"
 
 
 # Verifies greetings bypass the main agent by evaluating the deterministic greeting guard substitute.
 def test_guard_routes_greeting_to_fixed_response(monkeypatch):
-    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
     assert guard_route({"messages": [HumanMessage(content="hello")]}) == "greeting"
 
 
@@ -74,17 +77,17 @@ def test_graph_contains_only_request_level_nodes():
         "__start__",
         "main_agent",
         "greeting",
-        "refusal_to_answer",
+        "refuse_to_answer",
     }
 
 
 def test_graph_invokes_greeting_node(monkeypatch):
-    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
+    monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
 
     def unexpected_main_agent():
         pytest.fail("Greetings must bypass the main agent")
 
-    monkeypatch.setattr("src.backend.graph.build_main_agent", unexpected_main_agent)
+    monkeypatch.setattr(graph_module, "build_main_agent", unexpected_main_agent)
     result = asyncio.run(
         build_graph().ainvoke({"messages": [HumanMessage(content="hello")]})
     )
@@ -114,8 +117,8 @@ def test_graph_collects_requested_tool_responses(monkeypatch):
             )
             yield AIMessage(content="I use Python."), {}
 
-    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
-    monkeypatch.setattr("src.backend.graph.build_main_agent", lambda: FakeMainAgent())
+    monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
+    monkeypatch.setattr(graph_module, "build_main_agent", lambda: FakeMainAgent())
 
     result = asyncio.run(
         build_graph().ainvoke({"messages": [HumanMessage(content="What is your name?")]})
@@ -142,8 +145,8 @@ def test_graph_collects_each_project_evidence_text_separately(monkeypatch):
             )
             yield AIMessage(content="I found two projects."), {}
 
-    monkeypatch.setattr("src.backend.graph.classify_with_model", _mock_guard)
-    monkeypatch.setattr("src.backend.graph.build_main_agent", lambda: FakeMainAgent())
+    monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
+    monkeypatch.setattr(graph_module, "build_main_agent", lambda: FakeMainAgent())
 
     result = asyncio.run(
         build_graph().ainvoke(

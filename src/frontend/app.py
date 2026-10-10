@@ -5,9 +5,9 @@ import asyncio
 import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.backend.graph import graph
+from src.backend.graph import build_graph
 
-
+graph = build_graph()
 
 async def generate_response(
     messages: list[AIMessage | HumanMessage],

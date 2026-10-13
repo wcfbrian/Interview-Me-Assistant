@@ -125,11 +125,12 @@ live model requests.
 
 ## Run the Evaluation
 
-The DeepEval suite runs 27 golden interview cases against the graph, then scores
-the answers for hallucination, answer relevancy, faithfulness, contextual
-precision, and contextual recall. To pass the evaluation, all metrics must meet
-the required thresholds (greater than `0.5`). This command makes live model
-requests and may incur provider costs.
+The DeepEval suite runs 27 golden interview cases against the graph. The 24
+answerable cases are scored for hallucination, answer relevancy, faithfulness,
+contextual precision, and contextual recall. The 3 cases tagged
+`should_abstain` are scored only with the `Correct Abstention` G-Eval metric.
+Metrics must meet their configured thresholds (default `0.5`). This command
+makes live model requests and may incur provider costs.
 
 ```bash
 uv run eval/eval_agent.py
@@ -143,43 +144,36 @@ that cache with:
 uv run eval/eval_agent.py --rerun
 ```
 
-### Recorded baseline
+### Latest evaluation results
 
-Run on 2026-09-28 with 27 test cases:
+Run on 2026-10-13, with answerable and abstention cases evaluated separately:
 
-| Measure        |  Result |
-| -------------- | ------: |
-| Test cases     |      27 |
-| Passed         |      24 |
-| Failed         |       3 |
-| Pass rate      |  88.89% |
-| Median latency | 4.058 s |
-| p95 latency    | 7.994 s |
+| Case group | Cases | Passed | Failed | Pass rate |
+| ---------- | ----: | -----: | -----: | --------: |
+| Answerable | 24    | 24     | 0      | 100.00%  |
+| Abstention | 3     | 3      | 0      | 100.00%  |
+| **Total**  | **27**| **27** | **0**  | **100.00%** |
 
-The full per-case report is available at
-[`eval/eval_reports/evaluation_20260928_101313.md`](eval/eval_reports/evaluation_20260928_101313.md).
+| Group      | Metric                      | Average score | Metric pass rate |
+| ---------- | --------------------------- | ------------: | ---------------: |
+| Answerable | Hallucination               | 1.00          | 24 / 24          |
+| Answerable | Answer relevancy             | 0.96          | 24 / 24          |
+| Answerable | Faithfulness                 | 1.00          | 24 / 24          |
+| Answerable | Contextual precision         | 0.81          | 24 / 24          |
+| Answerable | Contextual recall            | 0.98          | 24 / 24          |
+| Abstention | Correct Abstention (G-Eval) | 1.00          | 3 / 3            |
+
+Per-case reports: [answerable cases](eval/eval_reports/answerable/evaluation_20261013_133707.md) · [abstention cases](eval/eval_reports/abstention/evaluation_20261013_133716.md).
 
 ### Findings
 
-- **Grounding is strong:** hallucination and faithfulness both scored 1.00 with
-  a 100% metric pass rate. Answer relevancy averaged 0.95 and passed 26 of 27
-  cases, with the only failure occurring on a refusal case.
-- **Retrieval metrics determine the remaining failures:** contextual precision
-  averaged 0.78 and passed 25 of 27 cases, while contextual recall averaged
-  0.89 and passed 24 of 27 cases.
-- **The three failures are evaluation artifacts:** `drought-unknown-accuracy`,
-  `fabricated-award`, and `qabot-prompt-injection` returned the exact expected
-  refusal and did not hallucinate, but contextual precision and recall scored
-  zero. Refusal cases should be evaluated with safety and answer-correctness
-  metrics instead of requiring supporting retrieval context.
-- **Latency:** median latency was 4.058 seconds and p95 latency was
-  7.994 seconds. The remaining tail is roughly twice the median and is worth
-  tracing by route, retrieval count, and model duration.
-
-The 88.89% test pass rate therefore understates behavioral correctness because
-the remaining failures use retrieval metrics that do not fit no-evidence
-refusal cases. Future baselines should report retrieval cases and refusal cases
-separately.
+- **All 27 cases passed:** all 24 answerable cases passed each of their five
+  metrics, and all 3 abstention cases passed the `Correct Abstention` metric.
+- **Grounding and retrieval scores were strong:** hallucination and faithfulness
+  averaged 1.00, answer relevancy 0.96, contextual precision 0.81, and
+  contextual recall 0.98. Each metric passed on all 24 answerable cases.
+- **Abstentions were handled correctly:** the three unsupported-claim and
+  prompt-injection cases averaged 1.00 on `Correct Abstention` and all passed.
 
 ### Future work
 
@@ -187,6 +181,5 @@ separately.
    LangSmith traces and an optional local debug view.
 2. Harden deployment with authentication, rate limiting, request timeouts, and
    user-friendly recovery when model or retrieval providers are unavailable.
-3. Expand evaluation with dedicated refusal and safety metrics, multi-turn and
-   guard-route cases, format compliance, multilingual prompts, and separate
-   retrieval and refusal baselines.
+3. Expand evaluation with multi-turn and guard-route cases, format compliance,
+   and multilingual prompts.

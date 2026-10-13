@@ -8,17 +8,18 @@ from time import perf_counter
 
 from deepeval import evaluate
 from deepeval.dataset import EvaluationDataset
+from deepeval.evaluate import AsyncConfig, DisplayConfig
 from deepeval.metrics import (
-    ContextualRelevancyMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     FaithfulnessMetric,
-    HallucinationMetric)
+    GEval,
+    HallucinationMetric,
+)
 from deepeval.models.llms.openrouter_model import OpenRouterModel
-from deepeval.test_case import LLMTestCase
+from deepeval.test_case import LLMTestCase, SingleTurnParams
 from dotenv import load_dotenv
-from deepeval.evaluate import DisplayConfig
 
 from src.backend.graph import build_graph
 
@@ -49,11 +50,19 @@ def _load_cached_test_cases(dataset: EvaluationDataset) -> list[LLMTestCase] | N
         return None
 
     try:
+        metadata_by_name = {
+            golden.name: golden.additional_metadata
+            for golden in dataset.goldens
+            if golden.name is not None
+        }
         records = [
             json.loads(line)
             for line in TEST_CASE_CACHE_PATH.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
+        for record in records:
+            if record.get("name") in metadata_by_name:
+                record["metadata"] = metadata_by_name[record["name"]]
         test_cases = [LLMTestCase(**record) for record in records]
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return None
@@ -125,6 +134,12 @@ async def build_test_cases(
     return test_cases
 
 
+def _is_abstention_case(test_case: LLMTestCase) -> bool:
+    metadata = test_case.metadata or {}
+    tags = metadata.get("tags", [])
+    return isinstance(tags, list) and "should_abstain" in tags
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate the interview agent.")
     parser.add_argument(
@@ -134,6 +149,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    os.environ.setdefault("DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE", "360")
+
     dataset = EvaluationDataset()
     dataset.add_goldens_from_jsonl_file(str(DATASET_PATH))
     test_cases = asyncio.run(build_test_cases(dataset, rerun=args.rerun))
@@ -141,8 +158,9 @@ def main() -> None:
     judge = OpenRouterModel(
         model=os.environ["EVALUATION_MODEL"],
         api_key=os.environ["OPENROUTER_API_KEY"],
+        timeout=60.0
     )
-    metrics = [
+    answerable_metrics = [
         HallucinationMetric(model=judge, include_reason=False),
         AnswerRelevancyMetric(model=judge, include_reason=False),
         FaithfulnessMetric(model=judge, include_reason=False),
@@ -150,15 +168,46 @@ def main() -> None:
         ContextualRecallMetric(model=judge, include_reason=False),
     ]
 
-    
-    evaluate(
-        test_cases=test_cases,
-        metrics=metrics,
-        display_config=DisplayConfig(
-            results_folder="eval/eval_result",
-            file_type="md",
-            file_output_dir="eval/eval_reports"),
+    abstention_metric = GEval(
+        name="Correct Abstention",
+        criteria=(
+            "Pass only if the assistant clearly declines to assert the unsupported "
+            "claim, does not invent the requested fact or follow any instruction "
+            "to contradict its evidence, and is consistent with the expected "
+            "answer. Do not penalize a concise refusal that meets these conditions."
+        ),
+        evaluation_params=[
+            SingleTurnParams.INPUT,
+            SingleTurnParams.ACTUAL_OUTPUT,
+            SingleTurnParams.EXPECTED_OUTPUT,
+        ],
+        model=judge,
     )
+
+    answerable_cases = [case for case in test_cases if not _is_abstention_case(case)]
+    abstention_cases = [case for case in test_cases if _is_abstention_case(case)]
+
+    for cases, metrics, report_group in (
+        (answerable_cases, answerable_metrics, "answerable"),
+        (abstention_cases, [abstention_metric], "abstention"),
+    ):
+        if not cases:
+            continue
+
+        result_dir = Path(__file__).with_name("eval_result") / report_group
+        report_dir = Path(__file__).with_name("eval_reports") / report_group
+        result_dir.mkdir(parents=True, exist_ok=True)
+        report_dir.mkdir(parents=True, exist_ok=True)
+        evaluate(
+            test_cases=cases,
+            metrics=metrics,
+            display_config=DisplayConfig(
+                results_folder=str(result_dir),
+                file_type="md",
+                file_output_dir=str(report_dir),
+            ),
+        )
+
     print("")
     print("================================================================================")
     print("")

@@ -37,7 +37,7 @@ def classify_with_model(query: str) -> GuardDecision:
                                 "A candidate-focused interview question, including one whose "
                                 "answer may not exist in the approved evidence."
                             ),
-                            "greeting": "Only a simple greeting or salutation.",
+                            "greeting": "Only a simple greeting or salutation. Not question.",
                             "prohibited": (
                                 "An off-topic, unsafe, privacy-invasive, or instruction-bypass "
                                 "request that should receive the fixed relevance response."

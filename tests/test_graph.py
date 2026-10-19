@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from src.backend.graph.decisions import GuardDecision, classify_with_model
 from src.backend.graph import GraphState, build_graph, greeting, guard_route
 from src.backend.graph.main_agent import MAIN_AGENT_PROMPT
+from src.backend.graph.resume import _profile_field_tool
 
 graph_module = import_module("src.backend.graph.graph")
 
@@ -20,6 +21,26 @@ def _mock_guard(query):
     if "education" in normalized or "project" in normalized or "name" in normalized:
         return GuardDecision(category="safe")
     return GuardDecision(category="prohibited")
+
+
+def test_profile_field_tool_formats_all_fields_as_markdown():
+    fields = {
+        "name": "Name",
+        "self_introduction": "Self Introduction",
+        "working_background": "Working Background",
+        "education": "Education",
+        "skills": "Skills",
+        "highlighted_project": "Highlighted Project",
+    }
+    profile = {field: f"{label} evidence\n\n- Detail" for field, label in fields.items()}
+    runtime = SimpleNamespace(context=profile)
+
+    for field, label in fields.items():
+        assert _profile_field_tool(field, runtime) == (
+            f"## {label}\n"
+            f"**Source:** `resume:{field}`\n\n"
+            f"{profile[field]}"
+        )
 
 
 # Verifies interview questions reach the main route by replacing model classification with a safe decision.
@@ -95,7 +116,7 @@ def test_graph_invokes_greeting_node(monkeypatch):
     assert result["messages"][-1].content == "Hello. Welcome to interview me."
 
 
-# Verifies graph state stores only the text emitted by the requested retrieval tool.
+# Verifies graph state preserves the complete response emitted by a retrieval tool.
 def test_graph_collects_requested_tool_responses(monkeypatch):
     class FakeMainAgent:
         async def astream(self, payload, context, config, stream_mode):
@@ -112,7 +133,9 @@ def test_graph_collects_requested_tool_responses(monkeypatch):
                 {"name": "get_skills"}, "", run_id=run_id
             )
             callback.on_tool_end(
-                '{"source": "resume:skills", "text": "Python, LangChain"}',
+                "## Skills\n"
+                "**Source:** `resume:skills`\n\n"
+                "Python, LangChain",
                 run_id=run_id,
             )
             yield AIMessage(content="I use Python."), {}
@@ -124,10 +147,22 @@ def test_graph_collects_requested_tool_responses(monkeypatch):
         build_graph().ainvoke({"messages": [HumanMessage(content="What is your name?")]})
     )
 
-    assert result["context"] == ["Python, LangChain"]
+    assert result["context"] == [
+        "## Skills\n**Source:** `resume:skills`\n\nPython, LangChain"
+    ]
 
 
-def test_graph_collects_each_project_evidence_text_separately(monkeypatch):
+def test_graph_collects_project_response_without_transforming_it(monkeypatch):
+    tool_response = (
+        "# Project evidence\n\n"
+        "## 1. One\n\n"
+        "- **Source:** `project:One`\n\n"
+        "First project\n\n"
+        "## 2. Two\n\n"
+        "- **Source:** `project:Two`\n\n"
+        "Second project"
+    )
+
     class FakeMainAgent:
         async def astream(self, payload, context, config, stream_mode):
             assert context["name"]
@@ -136,13 +171,7 @@ def test_graph_collects_each_project_evidence_text_separately(monkeypatch):
             callback.on_tool_start(
                 {"name": "get_project_detail"}, "", run_id=run_id
             )
-            callback.on_tool_end(
-                '{"status": "found", "evidence": ['
-                '{"source": "project:One", "text": "First project"}, '
-                '{"source": "project:Two", "text": "Second project"}'
-                "]}",
-                run_id=run_id,
-            )
+            callback.on_tool_end(tool_response, run_id=run_id)
             yield AIMessage(content="I found two projects."), {}
 
     monkeypatch.setattr(graph_module, "classify_with_model", _mock_guard)
@@ -154,7 +183,7 @@ def test_graph_collects_each_project_evidence_text_separately(monkeypatch):
         )
     )
 
-    assert result["context"] == ["First project", "Second project"]
+    assert result["context"] == [tool_response]
 
 
 # Verifies guard categories remain constrained by constructing a valid decision directly.

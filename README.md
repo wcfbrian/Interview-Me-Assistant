@@ -82,8 +82,8 @@ within `main_agent`; the tools are not additional graph nodes.
 | -------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
 | `guard_route`              | Conditional router | Classifies the conversation as safe, greeting, or prohibited.                        |
 | `main_agent`               | LangGraph node     | Routes questions to the appropriate tool and streams a grounded first-person answer. |
-| Resume field tools         | Tool               | Return approved profile evidence for general interview questions.                    |
-| `get_project_detail`       | Tool               | Runs hybrid Chroma and BM25 search and returns ranked project evidence.              |
+| Resume field tools         | Tool               | Return approved profile evidence as Markdown with source labels for general interview questions. |
+| `get_project_detail`       | Tool               | Runs hybrid Chroma and BM25 search and returns ranked Markdown chunks with source and section labels; a project may appear more than once. |
 | `greeting`                 | LangGraph node     | Returns a deterministic greeting without invoking the main agent.                    |
 | `refuse_to_answer` | LangGraph node     | Returns a deterministic response when the guard rejects a request.                   |
 
@@ -146,34 +146,35 @@ uv run eval/eval_agent.py --rerun
 
 ### Latest evaluation results
 
-Run on 2026-10-13, with answerable and abstention cases evaluated separately:
+Run on 2026-10-19, with answerable and abstention cases evaluated separately:
 
 | Case group | Cases | Passed | Failed | Pass rate |
 | ---------- | ----: | -----: | -----: | --------: |
-| Answerable | 24    | 24     | 0      | 100.00%  |
+| Answerable | 24    | 22     | 2      | 91.67%   |
 | Abstention | 3     | 3      | 0      | 100.00%  |
-| **Total**  | **27**| **27** | **0**  | **100.00%** |
+| **Total**  | **27**| **25** | **2**  | **92.59%** |
 
 | Group      | Metric                      | Average score | Metric pass rate |
 | ---------- | --------------------------- | ------------: | ---------------: |
 | Answerable | Hallucination               | 1.00          | 24 / 24          |
-| Answerable | Answer relevancy             | 0.96          | 24 / 24          |
+| Answerable | Answer relevancy             | 0.99          | 24 / 24          |
 | Answerable | Faithfulness                 | 1.00          | 24 / 24          |
-| Answerable | Contextual precision         | 0.81          | 24 / 24          |
-| Answerable | Contextual recall            | 0.98          | 24 / 24          |
+| Answerable | Contextual precision         | 0.84          | 22 / 24          |
+| Answerable | Contextual recall            | 0.90          | 24 / 24          |
 | Abstention | Correct Abstention (G-Eval) | 1.00          | 3 / 3            |
 
-Per-case reports: [answerable cases](eval/eval_reports/answerable/evaluation_20261013_133707.md) · [abstention cases](eval/eval_reports/abstention/evaluation_20261013_133716.md).
+Per-case reports: [answerable cases](eval/eval_reports/answerable/evaluation_20261019_235147.md) · [abstention cases](eval/eval_reports/abstention/evaluation_20261019_235153.md).
 
 ### Findings
 
-- **All 27 cases passed:** all 24 answerable cases passed each of their five
-  metrics, and all 3 abstention cases passed the `Correct Abstention` metric.
-- **Grounding and retrieval scores were strong:** hallucination and faithfulness
-  averaged 1.00, answer relevancy 0.96, contextual precision 0.81, and
-  contextual recall 0.98. Each metric passed on all 24 answerable cases.
-- **Abstentions were handled correctly:** the three unsupported-claim and
-  prompt-injection cases averaged 1.00 on `Correct Abstention` and all passed.
+- **25 of 27 cases passed:** 22 of 24 answerable cases and all 3 abstention cases
+  passed. The `blackjack-dataset` and `yolov4-quick-answer` cases failed
+  `Contextual Precision`.
+- **Grounding metrics remained strong:** hallucination and faithfulness averaged
+  1.00, answer relevancy 0.99, and contextual recall 0.90; each passed on all
+  24 answerable cases.
+- **Abstentions were handled correctly:** all three unsupported-claim and
+  prompt-injection cases passed `Correct Abstention`, averaging 1.00.
 
 ### Future work
 

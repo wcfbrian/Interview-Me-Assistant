@@ -7,7 +7,6 @@ tools used by ``main_agent`` and are intentionally not graph nodes.
 from __future__ import annotations
 
 from contextvars import ContextVar
-import json
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 from uuid import UUID
@@ -37,22 +36,8 @@ CAPTURED_TOOL_NAMES = {
 _tool_responses: ContextVar[list[str] | None] = ContextVar("tool_responses", default=None)
 
 
-def _tool_response_text(output: Any, tool_name: str) -> list[str]:
+def _tool_response_text(output: Any) -> list[str]:
     content = getattr(output, "content", output)
-    if isinstance(content, str):
-        try:
-            payload = json.loads(content)
-        except json.JSONDecodeError:
-            return [content]
-        if tool_name == "get_project_detail":
-            evidence = payload.get("evidence", []) if isinstance(payload, dict) else []
-            return [
-                item["text"]
-                for item in evidence
-                if isinstance(item, dict) and isinstance(item.get("text"), str)
-            ]
-        if isinstance(payload, dict) and isinstance(payload.get("text"), str):
-            return [payload["text"]]
     return [str(content)]
 
 
@@ -84,7 +69,7 @@ class _ToolResponseCollector(BaseCallbackHandler):
         responses = _tool_responses.get()
         tool_name = self._tool_names.get(run_id)
         if tool_name is not None and responses is not None:
-            responses.extend(_tool_response_text(output, tool_name))
+            responses.extend(_tool_response_text(output))
 
 
 def _guard_context(messages: list[BaseMessage]) -> str:
@@ -173,4 +158,3 @@ def build_graph():
     builder.add_edge("greeting", END)
     builder.add_edge("refuse_to_answer", END)
     return builder.compile()
-

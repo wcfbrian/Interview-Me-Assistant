@@ -1,4 +1,3 @@
-import json
 from typing import TypedDict
 
 from langchain.tools import ToolRuntime, tool
@@ -14,7 +13,12 @@ class ProfileContext(TypedDict):
 
 
 def _profile_field_tool(field: str, runtime: ToolRuntime[ProfileContext]) -> str:
-    return json.dumps({"source": f"resume:{field}", "text": runtime.context[field]})
+    label = field.replace("_", " ").title()
+    return (
+        f"## {label}\n"
+        f"**Source:** `resume:{field}`\n\n"
+        f"{runtime.context[field]}"
+    )
 
 
 @tool

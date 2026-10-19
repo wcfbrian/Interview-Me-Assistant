@@ -7,6 +7,7 @@ dependencies = [
     "langchain>=1.0.0,<2.0.0",
     "langchain-openai>=1.0.0,<2.0.0",
     "langchain-openrouter>=0.1.0,<1.0.0",
+    "langchain-text-splitters>=1.0.0,<2.0.0",
     "langgraph>=1.0.0,<2.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "streamlit>=1.40.0,<2.0.0",
@@ -15,13 +16,14 @@ dependencies = [
     "langchain-chroma>=0.2.0,<1.0.0",
     "rank-bm25>=0.2.2,<1.0.0",
     "langchain-typesafe>=0.0.1a3",
+    "torchvision"
+    
 ]
 [dependency-groups]
 dev = [
     "pytest>=8.0.0,<9.0.0",
     "deepeval>=4.2.6",
     "langchain-community>=0.4.0,<1.0.0",
-    "langchain-text-splitters>=1.0.0,<2.0.0",
 ]
 
 [build-system]

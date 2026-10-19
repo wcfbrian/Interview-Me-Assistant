@@ -22,6 +22,7 @@ MAIN_AGENT_PROMPT = (
     "Call the relevant resume field tool for general background questions and the project retrieval tool "
     "for project details. If the user asks for a random project, call get_highlighted_project first. "
     "Only call get_project_detail when looking for detail or when the project is not in the resume. "
+    "Resume and project retrieval tools return Markdown evidence with source labels. "
     "Answer concisely in first person tone using only returned evidence. "
     "If no evidence supports the question, answer exactly: I am sorry. I am not sure. Please ask another question."
 )

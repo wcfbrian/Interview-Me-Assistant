@@ -87,11 +87,11 @@ within `main_agent`; the tools are not additional graph nodes.
 | `greeting`                 | LangGraph node     | Returns a deterministic greeting without invoking the main agent.                    |
 | `refuse_to_answer` | LangGraph node     | Returns a deterministic response when the guard rejects a request.                   |
 
-## Ingest Data (Optional)
+## Initialize Data
 
-The repository includes generated profile and project artifacts. To rebuild
-them from a resume and public GitHub repositories, set `GITHUB_USERNAME` and
-run:
+The app requires a generated profile, project list, and retrieval index. If
+these artifacts are missing, set `GITHUB_USERNAME` and run the ingestion
+pipeline:
 
 ```bash
 uv run python -m src.backend.ingest --regenerate-json

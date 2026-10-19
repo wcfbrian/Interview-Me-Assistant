@@ -18,8 +18,6 @@ from rank_bm25 import BM25Okapi
 
 from ..config import settings
 
-BM25_INDEX_FILENAME = "projects.bm25.pkl"
-
 
 class ProjectSummary(BaseModel):
     summary: str = Field(..., description="A concise summary of the project. Limit to 300 words.")
@@ -112,7 +110,7 @@ def _build_project_bm25(projects: list[dict[str, str]]) -> dict | None:
 @lru_cache(maxsize=1)
 def get_project_bm25() -> dict | None:
     """Return the cached BM25 index for projects, if it exists."""
-    index_path = settings.chroma_dir / BM25_INDEX_FILENAME
+    index_path = settings.project_bm25_index_path
     if not index_path.exists():
         return None
     with index_path.open("rb") as handle:
@@ -130,7 +128,7 @@ def index_projects(projects_path: Path) -> int:
         )
     vector_store = reset_project_vector_store()
     settings.chroma_dir.mkdir(parents=True, exist_ok=True)
-    with (settings.chroma_dir / BM25_INDEX_FILENAME).open("wb") as handle:
+    with settings.project_bm25_index_path.open("wb") as handle:
         pickle.dump(_build_project_bm25(projects), handle)
     if not projects:
         return 0

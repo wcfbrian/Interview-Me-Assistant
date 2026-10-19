@@ -24,3 +24,18 @@ def load_projects(path: Path) -> list[dict[str, str]]:
     if not isinstance(projects, list):
         raise ValueError("projects.json must contain a JSON array")
     return [item for item in projects if isinstance(item, dict)]
+
+
+def validate_data_artifacts(
+    profile_path: Path,
+    project_path: Path,
+    project_bm25_index_path: Path,
+) -> None:
+    required_paths = (profile_path, project_path, project_bm25_index_path)
+    missing_paths = [path for path in required_paths if not path.is_file()]
+    if missing_paths:
+        missing = ", ".join(str(path) for path in missing_paths)
+        raise RuntimeError(
+            f"Interview data is not initialized. Missing required artifacts: {missing}. "
+            "Run `uv run python -m src.backend.ingest --regenerate-json` to create them."
+        )

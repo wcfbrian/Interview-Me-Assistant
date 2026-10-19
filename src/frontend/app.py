@@ -5,8 +5,15 @@ import asyncio
 import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 
+from src.backend.artifacts import validate_data_artifacts
+from src.backend.config import settings
 from src.backend.graph import build_graph
 
+validate_data_artifacts(
+    settings.profile_path,
+    settings.project_path,
+    settings.project_bm25_index_path,
+)
 graph = build_graph()
 
 async def generate_response(

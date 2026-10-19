@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+PROFILE_FILENAME = "profile.json"
+PROJECTS_FILENAME = "projects.json"
+PROJECT_BM25_INDEX_FILENAME = "projects.bm25.pkl"
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -28,9 +32,19 @@ class Settings:
     evaluation_model: str = os.getenv("EVALUATION_MODEL", "typesafe/jev-1.13")
     github_username: str = os.getenv("GITHUB_USERNAME", "")
     data_dir: Path = Path(os.getenv("DATA_DIR", "src/backend/data"))
-    chroma_dir: Path = Path(os.getenv("CHROMA_DIR", "src/backend/data/chroma"))
+    chroma_dir: Path = Path(
+        os.getenv(
+            "CHROMA_PERSIST_DIRECTORY",
+            os.getenv("CHROMA_DIR", "src/backend/data/chroma"),
+        )
+    )
     max_project_searches: int = int(os.getenv("MAX_PROJECT_SEARCHES", "2"))
     max_readme_fetches: int = int(os.getenv("MAX_README_FETCHES", "2"))
+    profile_filename: str = os.getenv("PROFILE_FILENAME", PROFILE_FILENAME)
+    projects_filename: str = os.getenv("PROJECTS_FILENAME", PROJECTS_FILENAME)
+    project_bm25_index_filename: str = os.getenv(
+        "PROJECT_BM25_INDEX_FILENAME", PROJECT_BM25_INDEX_FILENAME
+    )
 
     @property
     def resume_path(self) -> Path:
@@ -38,11 +52,15 @@ class Settings:
 
     @property
     def profile_path(self) -> Path:
-        return self.data_dir / "profile.json"
+        return self.data_dir / self.profile_filename
 
     @property
     def project_path(self) -> Path:
-        return self.data_dir / "projects.json"
+        return self.data_dir / self.projects_filename
+
+    @property
+    def project_bm25_index_path(self) -> Path:
+        return self.chroma_dir / self.project_bm25_index_filename
 
 
 settings = Settings()

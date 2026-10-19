@@ -124,6 +124,7 @@ def _build_project_bm25(projects: list[dict[str, str]]) -> dict | None:
     return {
         "bm25": BM25Okapi(tokenized_corpus),
         "chunk_ids": [chunk.metadata["chunk_id"] for _, chunk in documents],
+        "project_names": [str(project.get("name", "")) for project, _ in documents],
     }
 
 

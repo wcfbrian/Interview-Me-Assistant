@@ -4,10 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from langchain.tools import tool
 
-from src.backend.artifacts import load_projects
-from src.backend.config import settings
 from src.backend.ingest import get_project_bm25, get_project_vector_store
-from src.backend.ingest.ingest_project import split_project_readme
 
 
 def _tokens(text: str) -> list[str]:
@@ -26,26 +23,20 @@ def _semantic_project_search(query: str, vector_store, candidate_count: int):
 
 def _lexical_project_search(
     query: str,
-    projects: list[dict[str, str]],
     candidate_count: int,
 ):
     bm25_index = get_project_bm25()
-
-    # 1. Validate that the persisted BM25 index matches the current README chunks.
-    chunks = [
-        chunk
-        for project in projects
-        for chunk in split_project_readme(project)
-    ]
-    chunk_ids = [chunk.metadata["chunk_id"] for chunk in chunks]
+    chunk_ids = bm25_index.get("chunk_ids") if isinstance(bm25_index, dict) else None
     if (
         not isinstance(bm25_index, dict)
         or "bm25" not in bm25_index
-        or bm25_index.get("chunk_ids") != chunk_ids
-        or bm25_index["bm25"].corpus_size != len(chunks)
+        or not isinstance(chunk_ids, list)
+        or not isinstance(bm25_index.get("project_names"), list)
+        or len(bm25_index["project_names"]) != len(chunk_ids)
+        or bm25_index["bm25"].corpus_size != len(chunk_ids)
     ):
         raise RuntimeError(
-            "Persisted BM25 project index is missing; "
+            "Persisted BM25 project index is missing or incompatible; "
             "run project ingestion before searching."
         )
 
@@ -58,24 +49,33 @@ def _lexical_project_search(
         key=lambda x: x[1],  # Sort by score
     )
 
-    return [chunk_ids[index] for index, score in ranked if score > 0]
+    ranked_ids = [chunk_ids[index] for index, score in ranked if score > 0]
+    matching_names = {
+        str(name).strip().lower()
+        for name in bm25_index["project_names"]
+        if str(name).strip() and str(name).strip().lower() in query.lower()
+    }
+    exact_match_ids = [
+        chunk_id
+        for chunk_id, name in zip(chunk_ids, bm25_index["project_names"])
+        if str(name).strip().lower() in matching_names
+    ]
+    return list(dict.fromkeys([*ranked_ids, *exact_match_ids]))
 
 
-def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_store, k: int = 8):
+def _hybrid_project_search(query: str, vector_store, k: int = 8):
     """Return the top README chunks from hybrid retrieval.
 
     Chroma and BM25 rank README chunks. Reciprocal rank fusion combines chunk
-    rankings, allowing multiple ranked chunks to come from the same project.
+    rankings, and Chroma supplies the matching documents and metadata.
 
     Args:
         query: Search text used by both retrieval methods.
-        projects: Projects used to validate lexical IDs and resolve valid results.
         vector_store: Chroma vector store used for semantic retrieval.
         k: Maximum number of ranked chunks to return.
 
     Returns:
-        A list of ``(project_id, rrf_score, passage, headers)`` tuples in
-        descending score order.
+        A list of ``(document, rrf_score)`` tuples in descending score order.
     """
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -83,14 +83,33 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
             _semantic_project_search, query, vector_store, k
         )
         lexical_future = executor.submit(
-            _lexical_project_search, query, projects, k
+            _lexical_project_search, query, k
         )
         vector_matches = semantic_future.result()
         lexical_order = lexical_future.result()
-    projects_by_id = {
-        str(project.get("project_id", "")): project
-        for project in projects
+
+    documents_by_id = {
+        str(document.metadata["chunk_id"]): document
+        for document, _ in vector_matches
+        if document.metadata.get("chunk_id")
     }
+    lexical_ids_to_fetch = [
+        chunk_id for chunk_id in lexical_order if chunk_id not in documents_by_id
+    ]
+    if lexical_ids_to_fetch:
+        for document in vector_store.get_by_ids(lexical_ids_to_fetch):
+            chunk_id = str(document.metadata.get("chunk_id", ""))
+            if chunk_id:
+                documents_by_id[chunk_id] = document
+    missing_lexical_ids = [
+        chunk_id for chunk_id in lexical_order if chunk_id not in documents_by_id
+    ]
+    if missing_lexical_ids:
+        raise RuntimeError(
+            "Persisted BM25 project index does not match the Chroma project index; "
+            "run project ingestion before searching."
+        )
+
     ranked_chunks: dict[str, float] = {}
     fusion_constant = 60
     semantic_weight = 1.0
@@ -107,75 +126,60 @@ def _hybrid_project_search(query: str, projects: list[dict[str, str]], vector_st
             ranked_chunks[chunk_id] = 0.0
         ranked_chunks[chunk_id] += lexical_weight / (fusion_constant + rank)
 
-    chunks_by_id = {
-        chunk.metadata["chunk_id"]: chunk
-        for project in projects
-        for chunk in split_project_readme(project)
-    }
     chunk_scores = {
         chunk_id: score
         for chunk_id, score in ranked_chunks.items()
-        if chunk_id in chunks_by_id
-        and str(chunks_by_id[chunk_id].metadata["project_id"]) in projects_by_id
+        if chunk_id in documents_by_id
     }
 
     normalized_query = query.lower()
-    for project in projects:
-        project_id = str(project.get("project_id", ""))
-        project_name = str(project.get("name", "")).strip()
-        if project_name and project_name.lower() in normalized_query:
-            project_chunk_ids = [
-                chunk_id
-                for chunk_id, chunk in chunks_by_id.items()
-                if str(chunk.metadata["project_id"]) == project_id
-            ]
-            if project_chunk_ids:
-                best_chunk_id = max(
-                    project_chunk_ids,
-                    key=lambda chunk_id: chunk_scores.get(chunk_id, 0.0),
-                )
-                chunk_scores[best_chunk_id] = max(
-                    chunk_scores.get(best_chunk_id, 0.0),
-                    1.0,
-                )
+    matching_project_ids = {
+        str(document.metadata.get("project_id", ""))
+        for document in documents_by_id.values()
+        if str(document.metadata.get("name", "")).strip().lower() in normalized_query
+        and document.metadata.get("project_id")
+    }
+    for project_id in matching_project_ids:
+        project_chunk_ids = [
+            chunk_id
+            for chunk_id, document in documents_by_id.items()
+            if str(document.metadata.get("project_id", "")) == project_id
+        ]
+        if project_chunk_ids:
+            best_chunk_id = max(
+                project_chunk_ids,
+                key=lambda chunk_id: chunk_scores.get(chunk_id, 0.0),
+            )
+            chunk_scores[best_chunk_id] = max(
+                chunk_scores.get(best_chunk_id, 0.0),
+                1.0,
+            )
 
     results = []
     for chunk_id, score in heapq.nlargest(
         k, chunk_scores.items(), key=lambda item: item[1]
     ):
-        chunk = chunks_by_id[chunk_id]
-        headers = {
-            key: str(chunk.metadata[key])
-            for key in ("h1", "h2")
-            if chunk.metadata.get(key)
-        }
-        results.append(
-            (
-                str(chunk.metadata["project_id"]),
-                score,
-                chunk.page_content,
-                headers,
-            )
-        )
+        results.append((documents_by_id[chunk_id], score))
     return results
 
 
 @tool
 def get_project_detail(query: str) -> str:
     """Return ranked project evidence as Markdown with source and section labels."""
-    projects = load_projects(settings.project_path)
-    projects_by_id = {
-        str(project.get("project_id", "")): project
-        for project in projects
-    }
-    matches = _hybrid_project_search(query, projects, get_project_vector_store())
+    vector_store = get_project_vector_store()
+    matches = _hybrid_project_search(query, vector_store)
     if not matches:
         return "# Project evidence\n\nNo relevant project evidence was found."
 
     sections = []
-    for rank, (project_id, _, passage, headers) in enumerate(matches, start=1):
-        project_name = str(projects_by_id[project_id].get("name", "unknown"))
+    for rank, (document, _) in enumerate(matches, start=1):
+        project_name = str(document.metadata.get("name", "unknown"))
         source = f"project:{project_name}"
+        headers = {
+            key: str(document.metadata[key])
+            for key in ("h1", "h2")
+            if document.metadata.get(key)
+        }
         section = " > ".join(headers.values())
         lines = [
             f"## {rank}. {project_name}",
@@ -184,7 +188,7 @@ def get_project_detail(query: str) -> str:
         ]
         if section:
             lines.append(f"- **Section:** {section}")
-        lines.extend(["", passage.strip()])
+        lines.extend(["\n", document.page_content.strip()])
         sections.append("\n".join(lines))
 
     return "# Project evidence\n\n" + "\n\n".join(sections)

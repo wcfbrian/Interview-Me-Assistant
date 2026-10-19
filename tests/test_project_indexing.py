@@ -4,10 +4,24 @@ import json
 
 from src.backend.config import settings
 from src.backend.ingest.ingest_project import (
+    _build_project_bm25,
     index_projects,
     pipeline,
     split_project_readme,
 )
+
+
+def test_project_bm25_index_stores_project_names_for_exact_match_search():
+    index = _build_project_bm25([
+        {
+            "project_id": "github-1",
+            "name": "demo",
+            "readme": "# Demo\n\nProject retrieval",
+        },
+    ])
+
+    assert index["project_names"] == ["demo"]
+    assert index["chunk_ids"] == ["github-1:chunk:0"]
 
 
 def test_split_project_readme_preserves_markdown_sections_and_context():
@@ -36,7 +50,7 @@ def test_split_project_readme_limits_chunk_size_and_skips_empty_content():
     })
 
     assert len(chunks) > 1
-    assert all(len(chunk.page_content) <= 1000 for chunk in chunks)
+    assert all(len(chunk.page_content) <= 800 for chunk in chunks)
     assert split_project_readme({"project_id": "empty", "readme": ""}) == []
 
 

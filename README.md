@@ -83,7 +83,7 @@ within `main_agent`; the tools are not additional graph nodes.
 | `guard_route`              | Conditional router | Classifies the conversation as safe, greeting, or prohibited.                        |
 | `main_agent`               | LangGraph node     | Routes questions to the appropriate tool and streams a grounded first-person answer. |
 | Resume field tools         | Tool               | Return approved profile evidence as Markdown with source labels for general interview questions. |
-| `get_project_detail`       | Tool               | Runs hybrid Chroma and BM25 search and returns ranked Markdown chunks with source and section labels; a project may appear more than once. |
+| `get_project_detail`       | Tool               | Runs hybrid Chroma and BM25 search, then formats ranked Chroma documents as Markdown with source and section labels; a project may appear more than once. |
 | `greeting`                 | LangGraph node     | Returns a deterministic greeting without invoking the main agent.                    |
 | `refuse_to_answer` | LangGraph node     | Returns a deterministic response when the guard rejects a request.                   |
 
@@ -97,8 +97,14 @@ pipeline:
 uv run python -m src.backend.ingest --regenerate-json
 ```
 
-This extracts resume text, populates the candidate profile, generates project
-summaries, and rebuilds the Chroma and BM25 indexes under `src/backend/data`.
+This extracts resume text, populates the candidate profile, saves GitHub README
+records, and rebuilds the Chroma and BM25 indexes under `src/backend/data`.
+Project retrieval reads passages and metadata from Chroma; `projects.json` is
+used during ingestion and indexing, not for question-time lookups.
+
+To rebuild indexes from existing `projects.json` without refreshing source
+records, run `uv run python -m src.backend.ingest`. Use `--regenerate-json` when
+you also want to refresh the profile and GitHub project records.
 
 ## Project Layout
 
@@ -146,7 +152,7 @@ uv run eval/eval_agent.py --rerun
 
 ### Latest evaluation results
 
-Run on 2026-10-19, with answerable and abstention cases evaluated separately:
+Run on 2026-10-20, with answerable and abstention cases evaluated separately:
 
 | Case group | Cases | Passed | Failed | Pass rate |
 | ---------- | ----: | -----: | -----: | --------: |
@@ -158,23 +164,28 @@ Run on 2026-10-19, with answerable and abstention cases evaluated separately:
 | ---------- | --------------------------- | ------------: | ---------------: |
 | Answerable | Hallucination               | 1.00          | 24 / 24          |
 | Answerable | Answer relevancy             | 0.99          | 24 / 24          |
-| Answerable | Faithfulness                 | 1.00          | 24 / 24          |
-| Answerable | Contextual precision         | 0.84          | 22 / 24          |
+| Answerable | Faithfulness                 | 0.99          | 24 / 24          |
+| Answerable | Contextual precision         | 0.85          | 22 / 24          |
 | Answerable | Contextual recall            | 0.90          | 24 / 24          |
 | Abstention | Correct Abstention (G-Eval) | 1.00          | 3 / 3            |
 
-Per-case reports: [answerable cases](eval/eval_reports/answerable/evaluation_20261019_235147.md) · [abstention cases](eval/eval_reports/abstention/evaluation_20261019_235153.md).
+Per-case reports: [answerable cases](eval/eval_reports/answerable/evaluation_20261020_004128.md) · [abstention cases](eval/eval_reports/abstention/evaluation_20261020_004133.md).
 
 ### Findings
 
-- **25 of 27 cases passed:** 22 of 24 answerable cases and all 3 abstention cases
-  passed. The `blackjack-dataset` and `yolov4-quick-answer` cases failed
-  `Contextual Precision`.
-- **Grounding metrics remained strong:** hallucination and faithfulness averaged
-  1.00, answer relevancy 0.99, and contextual recall 0.90; each passed on all
-  24 answerable cases.
-- **Abstentions were handled correctly:** all three unsupported-claim and
-  prompt-injection cases passed `Correct Abstention`, averaging 1.00.
+- **Overall success is steady:** 25 of 27 cases passed (92.59%), matching the
+  previous run. All 3 unsupported-claim and prompt-injection cases passed
+  `Correct Abstention` with an average score of 1.00.
+- **Grounding remains strong:** all 24 answerable cases passed hallucination,
+  answer relevancy, faithfulness, and contextual recall. Their average scores
+  were 1.00, 0.99, 0.99, and 0.90, respectively.
+- **Contextual precision remains the main weakness:** its average rose slightly
+  from 0.84 to 0.85, with 22 of 24 cases passing. `video-slide-report` scored
+  0.47 and `healthcare-vague-intent` scored 0.38, both below the 0.50
+  threshold. In each, the answer included more detail than the concise expected
+  response; the healthcare answer also expanded into a second project. This
+  points to answer focus and retrieval precision as the next areas to improve,
+  rather than a broad grounding or abstention failure.
 
 ### Future work
 

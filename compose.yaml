@@ -5,5 +5,36 @@ services:
       - "8501:8501"
     env_file:
       - .env
+    environment:
+      TTS_BASE_URL: ${COMPOSE_TTS_BASE_URL:-http://qwen-tts:8000}
+      WHISPER_CACHE_DIR: /app/cache/faster-whisper
     volumes:
       - ./src/backend/data:/app/src/backend/data
+      - whisper-model-cache:/app/cache/faster-whisper
+
+  qwen-tts:
+    profiles: ["voice"]
+    build:
+      context: .
+      dockerfile: Dockerfile.tts
+    gpus: all
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - qwen-tts-model-cache:/models/huggingface
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3))['ready']"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15m
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+volumes:
+  whisper-model-cache:
+  qwen-tts-model-cache:

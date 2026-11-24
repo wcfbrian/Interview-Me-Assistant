@@ -8,6 +8,7 @@ Key capabilities:
 - Evidence-scoped answers from approved resume fields and project records
 - Hybrid project retrieval using Chroma, BM25, and reciprocal rank fusion
 - Streaming responses in a conversational Streamlit interface
+- Optional browser-microphone voice input and local GPU speech output
 
 ## Quick Start
 
@@ -30,7 +31,7 @@ OPENROUTER_API_KEY=your-api-key
 3. Start the application:
 
 ```bash
-uv run streamlit run src/frontend/app.py
+uv run streamlit run src/frontend/app.py --server.maxUploadSize=26
 ```
 
 Open [http://localhost:8501](http://localhost:8501), enter an interview
@@ -49,6 +50,66 @@ The container exposes the same interface at
 The defaults in `.env.example` configure the main, guard, embedding, and
 evaluation models. `GITHUB_USERNAME` is only required when regenerating project
 data. Keep `.env` local and never commit it.
+
+## Voice Chat (Optional)
+
+New browser sessions start in **Text** mode. The per-session **Text / Voice**
+switch applies to future turns; typing remains available in either mode.
+Voice input records through the browser microphone, transcribes English on the
+CPU with `faster-whisper` `base.en`, and submits the transcript as the user
+message. The Whisper weights download only when voice input is first used and
+are kept in a local cache (a named Compose volume in container runs). Record
+again to retry an empty or failed transcription. There is no recording-duration
+cap; recordings are processed in memory and discarded.
+`MAX_VOICE_AUDIO_BYTES` defaults to 25 MiB to bound uploads and resource use.
+Streamlit's upload limit is set to 26 MiB in both launch commands; raise that
+limit as well if you increase `MAX_VOICE_AUDIO_BYTES`.
+
+Voice replies use the locally hosted Qwen3-TTS 1.7B CustomVoice model with the
+fixed Aiden speaker. The complete answer is spoken, with long answers split
+into chunks and joined into one player. Audio is cached only for the current
+browser session; player controls remain available if browser autoplay is
+blocked. A TTS failure leaves the text answer intact and offers a retry. The
+TTS service is single-user/serialized and is not required for text chat.
+
+The standard Compose workflow remains CPU-only:
+
+```bash
+docker compose up --build
+```
+
+For voice mode, install the NVIDIA Container Toolkit with a working CUDA
+runtime and compatible NVIDIA driver, then enable the optional GPU service:
+
+```bash
+docker compose --profile voice up --build
+```
+
+The service preloads Qwen3-TTS when started, even if the interface remains in
+Text mode. The first startup downloads the model weights into the persistent
+`qwen-tts-model-cache` volume and may take a while. It requires an NVIDIA GPU
+(the target host is an RTX 4090) and internet access for the initial model
+download. The TTS image builds FlashAttention-2 against its matching
+PyTorch/CUDA version and uses it for inference, so its first image build takes
+longer. The GPU service port is published only on `127.0.0.1:8000`; the app
+uses the internal Compose address. Do not remove the named cache volume if you
+want to retain downloaded weights. Wait for `docker compose --profile voice ps`
+to report the service as healthy before using Voice mode.
+
+For a host `uv run` app, start only the local GPU service with
+`docker compose --profile voice up --build qwen-tts`, then run
+`uv run streamlit run src/frontend/app.py --server.maxUploadSize=26` in another
+terminal. Its default
+TTS endpoint is `http://127.0.0.1:8000`; `TTS_BASE_URL` and
+`TTS_TIMEOUT_SECONDS` can be overridden. `WHISPER_CACHE_DIR` and
+`MAX_VOICE_AUDIO_BYTES` configure the local transcription cache and practical
+recording size limit. TTS endpoint configuration is restricted to local HTTP
+hosts (`localhost`, loopback, or the Compose `qwen-tts` service); in Compose,
+`COMPOSE_TTS_BASE_URL` overrides the internal service URL if needed. Speech
+transcription and synthesis run locally. As in Text mode, the transcript and
+conversation are sent to the configured chat-model provider to generate the
+answer. The app does not durably store microphone or generated audio, logs no
+voice content, and excludes Voice-mode turns from LangSmith traces.
 
 To trace graph, agent, tool, and model runs in LangSmith, set
 `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, and `LANGSMITH_PROJECT` in `.env`.
@@ -114,6 +175,8 @@ you also want to refresh the profile and GitHub project records.
 | `src/backend/ingest`  | Resume extraction and GitHub project indexing pipelines.           |
 | `src/backend/data`    | Generated profile, project records, and persisted search indexes.  |
 | `src/frontend/app.py` | Streamlit chat interface and response streaming adapter.           |
+| `src/backend/voice.py` | Local microphone-transcription and TTS client adapters.            |
+| `src/backend/tts_service.py` | Isolated GPU Qwen3-TTS service.                              |
 | `tests`               | Deterministic unit and integration tests.                          |
 | `eval`                | Golden cases, DeepEval runner, cached results, and reports.        |
 

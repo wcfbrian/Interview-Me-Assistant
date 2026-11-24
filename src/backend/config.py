@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -45,6 +46,41 @@ class Settings:
     project_bm25_index_filename: str = os.getenv(
         "PROJECT_BM25_INDEX_FILENAME", PROJECT_BM25_INDEX_FILENAME
     )
+    whisper_cache_dir: Path = Path(
+        os.getenv(
+            "WHISPER_CACHE_DIR",
+            "~/.cache/interview-me/faster-whisper",
+        )
+    ).expanduser()
+    max_voice_audio_bytes: int = int(
+        os.getenv("MAX_VOICE_AUDIO_BYTES", str(25 * 1024 * 1024))
+    )
+    tts_base_url: str = os.getenv("TTS_BASE_URL", "http://127.0.0.1:8000")
+    tts_timeout_seconds: int = int(os.getenv("TTS_TIMEOUT_SECONDS", "300"))
+
+    def __post_init__(self) -> None:
+        if self.max_voice_audio_bytes < 1:
+            raise ValueError("MAX_VOICE_AUDIO_BYTES must be positive")
+        if self.tts_timeout_seconds < 1:
+            raise ValueError("TTS_TIMEOUT_SECONDS must be positive")
+        endpoint = urlsplit(self.tts_base_url)
+        try:
+            endpoint.port
+        except ValueError as exc:
+            raise ValueError("TTS_BASE_URL must use a supported local HTTP endpoint") from exc
+        if (
+            endpoint.scheme != "http"
+            or endpoint.hostname
+            not in {"localhost", "127.0.0.1", "::1", "qwen-tts"}
+            or endpoint.username
+            or endpoint.password
+            or endpoint.query
+            or endpoint.fragment
+            or endpoint.path not in {"", "/"}
+        ):
+            raise ValueError(
+                "TTS_BASE_URL must use a supported local HTTP endpoint"
+            )
 
     @property
     def resume_path(self) -> Path:

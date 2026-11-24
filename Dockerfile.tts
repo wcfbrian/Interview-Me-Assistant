@@ -1,0 +1,24 @@
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel AS flash-attn-builder
+
+RUN pip install --no-cache-dir ninja packaging psutil
+RUN MAX_JOBS=4 pip wheel --no-build-isolation --no-deps \
+    "flash-attn==2.7.4.post1" \
+    --wheel-dir=/wheels
+
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+COPY --from=flash-attn-builder /wheels /wheels
+RUN pip install --no-cache-dir \
+    "qwen-tts>=0.1.1,<0.2" \
+    "transformers>=4.57.3,<5" \
+    "soundfile>=0.12,<1" \
+    "fastapi>=0.115,<1" \
+    "uvicorn[standard]>=0.30,<1" \
+    /wheels/flash_attn*.whl \
+    && rm -rf /wheels
+COPY src/backend/tts_service.py ./tts_service.py
+
+ENV HF_HOME=/models/huggingface
+EXPOSE 8000
+CMD ["uvicorn", "tts_service:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

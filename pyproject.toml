@@ -16,8 +16,10 @@ dependencies = [
     "langchain-chroma>=0.2.0,<1.0.0",
     "rank-bm25>=0.2.2,<1.0.0",
     "langchain-typesafe>=0.0.1a3",
-    "torchvision"
-    
+    "torchvision",
+    "azure-identity",
+    "faster-whisper>=1.1.0,<2.0.0",
+    "av>=11,<19",
 ]
 [dependency-groups]
 dev = [

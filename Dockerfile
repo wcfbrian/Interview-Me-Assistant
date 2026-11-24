@@ -6,4 +6,4 @@ COPY src ./src
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8501
-CMD ["uv", "run", "--no-dev", "streamlit", "run", "src/frontend/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+CMD ["uv", "run", "--no-dev", "streamlit", "run", "src/frontend/app.py", "--server.address", "0.0.0.0", "--server.port", "8501", "--server.maxUploadSize=26"]

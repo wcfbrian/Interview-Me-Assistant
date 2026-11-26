@@ -137,6 +137,25 @@ mode = st.radio(
     help="The selected mode applies to new turns only. Typing remains available in either mode.",
 )
 
+if mode == "Voice":
+    st.markdown(
+        """
+        <style>
+        [data-testid="stElementContainer"][class*="st-key-voice-input-"] {
+            position: fixed !important;
+            bottom: calc(56px + 3.6rem + 0.5rem) !important;
+            left: max(calc((100vw - 736px) / 2 + 16px), 16px) !important;
+            width: min(704px, calc(100vw - 2.5rem)) !important;
+            z-index: 100 !important;
+        }
+        [data-testid="stMainBlockContainer"] {
+            padding-bottom: 8rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 for message in st.session_state.messages:
     role = "assistant" if isinstance(message, AIMessage) else "user"
     with st.chat_message(role):
@@ -154,7 +173,6 @@ if mode == "Voice":
         if st.button("Dismiss and record again", key="retry-recording"):
             st.session_state.voice_input_error = None
     audio_recording = st.audio_input(
-        "Record an English question",
         key=f"voice-input-{st.session_state.voice_input_version}",
     )
 

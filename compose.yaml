@@ -21,7 +21,10 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
+      - ./src/backend/data/my_voice.wav:/app/data/my_voice.wav:ro
+      - ./src/backend/data/my_voice.txt:/app/data/my_voice.txt:ro
       - qwen-tts-model-cache:/models/huggingface
+      - qwen-tts-voice-clone-cache:/voice-clone
     healthcheck:
       test:
         - CMD
@@ -38,3 +41,4 @@ services:
 volumes:
   whisper-model-cache:
   qwen-tts-model-cache:
+  qwen-tts-voice-clone-cache:

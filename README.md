@@ -65,12 +65,17 @@ cap; recordings are processed in memory and discarded.
 Streamlit's upload limit is set to 26 MiB in both launch commands; raise that
 limit as well if you increase `MAX_VOICE_AUDIO_BYTES`.
 
-Voice replies use the locally hosted Qwen3-TTS 1.7B CustomVoice model with the
-fixed Aiden speaker. The complete answer is spoken, with long answers split
-into chunks and joined into one player. Audio is cached only for the current
-browser session; player controls remain available if browser autoplay is
-blocked. A TTS failure leaves the text answer intact and offers a retry. The
-TTS service is single-user/serialized and is not required for text chat.
+Voice replies use the locally hosted Qwen3-TTS 1.7B Base voice-clone model,
+initialized from `src/backend/data/my_voice.wav` and its transcript in
+`src/backend/data/my_voice.txt`. Ensure both files exist before starting the
+voice profile; Compose mounts them read-only in the TTS container. On first
+startup, the service builds and saves a reusable clone prompt in the persistent
+`qwen-tts-voice-clone-cache` volume; it rebuilds the prompt if either reference
+file changes. The complete answer is spoken, with long answers split into
+chunks and joined into one player. Audio is cached only for the current browser
+session; player controls remain available if browser autoplay is blocked. A TTS
+failure leaves the text answer intact and offers a retry. The TTS service is
+single-user/serialized and is not required for text chat.
 
 The standard Compose workflow remains CPU-only:
 
@@ -92,9 +97,10 @@ Text mode. The first startup downloads the model weights into the persistent
 download. The TTS image builds FlashAttention-2 against its matching
 PyTorch/CUDA version and uses it for inference, so its first image build takes
 longer. The GPU service port is published only on `127.0.0.1:8000`; the app
-uses the internal Compose address. Do not remove the named cache volume if you
-want to retain downloaded weights. Wait for `docker compose --profile voice ps`
-to report the service as healthy before using Voice mode.
+uses the internal Compose address. Do not remove the model or voice-clone cache
+volumes if you want to retain downloaded weights and the prepared clone. Wait
+for `docker compose --profile voice ps` to report the service as healthy before
+using Voice mode.
 
 For a host `uv run` app, start only the local GPU service with
 `docker compose --profile voice up --build qwen-tts`, then run
